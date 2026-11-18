@@ -386,6 +386,57 @@ class DriveFileRepository(
       domain
     }
 
+  override suspend fun getOrCreateFolder(name: String, parentId: String): CloudFile =
+    withContext(Dispatchers.IO) {
+      val uid = currentUid()
+      val trimmed = name.trim()
+      val existingInFolder = cachedDao.getFolderOnce(uid, parentId)
+      val match = existingInFolder.firstOrNull {
+        it.categoryName == FileCategory.FOLDER.name && it.name.equals(trimmed, ignoreCase = true)
+      }
+      if (match != null) {
+        val offline = offlineDao.getByFileId(uid, match.id)
+        return@withContext match.toDomain(offline)
+      }
+      try {
+        createFolder(trimmed, parentId)
+      } catch (e: IllegalArgumentException) {
+        val fallback = cachedDao.getFolderOnce(uid, parentId).firstOrNull {
+          it.categoryName == FileCategory.FOLDER.name && it.name.equals(trimmed, ignoreCase = true)
+        }
+        fallback?.let {
+          val offline = offlineDao.getByFileId(uid, it.id)
+          it.toDomain(offline)
+        } ?: throw e
+      }
+    }
+
+  override suspend fun copyFolder(folderId: String, newName: String, parentId: String): CloudFile =
+    withContext(Dispatchers.IO) {
+      val targetParent = if (parentId.isBlank()) "root" else parentId
+      val newFolder = createFolder(newName, targetParent)
+      copyFolderContentsInternal(folderId, newFolder.id)
+      newFolder
+    }
+
+  private suspend fun copyFolderContentsInternal(sourceFolderId: String, targetFolderId: String) {
+    var pageToken: String? = null
+    do {
+      val result = listFolderFiles(sourceFolderId, FilterConfig(), pageToken = pageToken, isOnline = true)
+      for (item in result.files) {
+        if (item.isFolder) {
+          val subFolder = createFolder(item.name, targetFolderId)
+          copyFolderContentsInternal(item.id, subFolder.id)
+        } else {
+          copyFile(item.id, item.name, targetFolderId)
+        }
+      }
+      pageToken = result.nextPageToken
+    } while (!pageToken.isNullOrBlank())
+  }
+
+
+
   override suspend fun uploadFileFromUri(
     uri: Uri,
     fileName: String,
@@ -468,6 +519,8 @@ class DriveFileRepository(
       cachedDao.upsert(domain.toEntity(uid, isSharedWithMe = false))
       domain
     }
+
+
 
   override suspend fun setTrashed(fileId: String, trashed: Boolean): CloudFile =
     withContext(Dispatchers.IO) {

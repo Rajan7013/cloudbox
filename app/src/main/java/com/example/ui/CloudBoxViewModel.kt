@@ -6,6 +6,7 @@ import android.content.Intent
 import android.net.Uri
 import android.provider.OpenableColumns
 import androidx.credentials.CredentialManager
+import androidx.documentfile.provider.DocumentFile
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.auth.DriveAuthManager
@@ -693,6 +694,86 @@ class CloudBoxViewModel(application: Application) : AndroidViewModel(application
     enqueueUploads(listOf(uri), mapOf(uri to pdfFile.name))
   }
 
+  fun uploadFolderTree(treeUri: Uri) {
+    val parentId = currentFolderId()
+    viewModelScope.launch {
+      try {
+        runCatching {
+          appContext.contentResolver.takePersistableUriPermission(
+            treeUri,
+            Intent.FLAG_GRANT_READ_URI_PERMISSION
+          )
+        }
+
+        val rootDoc = DocumentFile.fromTreeUri(appContext, treeUri)
+        if (rootDoc == null || !rootDoc.isDirectory) {
+          emitToast("Could not access folder")
+          return@launch
+        }
+
+        val folderName = rootDoc.name?.takeIf { it.isNotBlank() } ?: "Uploaded Folder"
+        emitToast("Uploading folder “$folderName”...")
+        _uploadCardCollapsed.value = false
+
+        // Create or find top-level folder in Google Drive
+        val rootDriveFolder = repository.getOrCreateFolder(folderName, parentId)
+
+        var totalFiles = 0
+        var totalFolders = 1
+
+        suspend fun traverse(docDir: DocumentFile, driveParentId: String) {
+          val children = docDir.listFiles()
+          val dirs = children.filter { it.isDirectory }
+          val files = children.filter { it.isFile }
+
+          if (files.isNotEmpty()) {
+            val net = networkStatus.value
+            val wifiOnly = settings.value.wifiOnlyUploads
+            val tasks = files.map { fileDoc ->
+              val name = fileDoc.name ?: "Untitled"
+              val mime = fileDoc.type ?: "application/octet-stream"
+              val size = fileDoc.length()
+              val initialStatus = when {
+                !net.isOnline -> UploadStatus.FAILED
+                wifiOnly && !net.isUnmeteredWifi -> UploadStatus.WAITING_WIFI
+                else -> UploadStatus.QUEUED
+              }
+              UploadTaskState(
+                id = UUID.randomUUID().toString(),
+                fileName = name,
+                mimeType = mime,
+                sourceUriString = fileDoc.uri.toString(),
+                parentFolderId = driveParentId,
+                totalBytes = size,
+                uploadedBytes = 0L,
+                status = initialStatus,
+                errorMessage = if (!net.isOnline) "No connection" else null,
+              )
+            }
+            totalFiles += tasks.size
+            _uploadTasks.value = _uploadTasks.value + tasks
+            tasks.filter { it.status == UploadStatus.QUEUED }.forEach { task ->
+              launchUploadTask(task)
+            }
+          }
+
+          for (subDir in dirs) {
+            val subName = subDir.name?.takeIf { it.isNotBlank() } ?: "Folder"
+            val subDriveFolder = repository.getOrCreateFolder(subName, driveParentId)
+            totalFolders++
+            traverse(subDir, subDriveFolder.id)
+          }
+        }
+
+        traverse(rootDoc, rootDriveFolder.id)
+        emitToast("Queued $totalFiles file(s) across $totalFolders folder(s)")
+        loadFolder(currentFolderId())
+      } catch (e: Exception) {
+        emitToast("Folder upload failed: ${e.localizedMessage}")
+      }
+    }
+  }
+
   fun cancelUpload(taskId: String) {
     cancelledUploadIds.add(taskId)
     _uploadTasks.value = _uploadTasks.value.filterNot { it.id == taskId }
@@ -861,8 +942,14 @@ class CloudBoxViewModel(application: Application) : AndroidViewModel(application
   fun copyFile(file: CloudFile) {
     viewModelScope.launch {
       try {
-        val copied = repository.copyFile(file.id, "Copy of ${file.name}", currentFolderId())
-        emitToast("Saved copy “${copied.name}”")
+        if (file.isFolder) {
+          emitToast("Copying folder “${file.name}”...")
+          val copied = repository.copyFolder(file.id, "Copy of ${file.name}", currentFolderId())
+          emitToast("Saved copy “${copied.name}”")
+        } else {
+          val copied = repository.copyFile(file.id, "Copy of ${file.name}", currentFolderId())
+          emitToast("Saved copy “${copied.name}”")
+        }
         refreshCurrentTab()
       } catch (e: Exception) {
         emitToast(e.localizedMessage ?: "Couldn't make a copy")

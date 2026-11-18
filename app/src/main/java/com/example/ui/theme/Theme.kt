@@ -1,5 +1,6 @@
 package com.example.ui.theme
 
+import android.app.Activity
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.isSystemInDarkTheme
@@ -12,9 +13,12 @@ import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.Immutable
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.unit.dp
+import androidx.core.view.WindowCompat
 import com.example.model.FileCategory
 import com.example.model.ThemePreference
 
@@ -152,6 +156,18 @@ fun CloudBoxTheme(
 
   val targetScheme = if (isDark) CloudBoxDarkColorScheme else CloudBoxLightColorScheme
   val animatedScheme = animateColorScheme(targetScheme)
+
+  val view = LocalView.current
+  if (!view.isInEditMode) {
+    SideEffect {
+      val window = (view.context as? Activity)?.window
+      if (window != null) {
+        val insetsController = WindowCompat.getInsetsController(window, view)
+        insetsController.isAppearanceLightStatusBars = !isDark
+        insetsController.isAppearanceLightNavigationBars = !isDark
+      }
+    }
+  }
 
   val extended =
     CloudBoxExtendedColors(

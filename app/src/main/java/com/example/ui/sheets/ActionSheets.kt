@@ -27,6 +27,7 @@ import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.CreateNewFolder
+import androidx.compose.material.icons.filled.DriveFolderUpload
 import androidx.compose.material.icons.filled.DeleteOutline
 import androidx.compose.material.icons.filled.DocumentScanner
 import androidx.compose.material.icons.filled.Download
@@ -104,6 +105,7 @@ fun CreateUploadSheet(
   onDismiss: () -> Unit,
   onNewFolder: () -> Unit,
   onUploadFiles: () -> Unit,
+  onUploadFolder: () -> Unit,
   onUploadMedia: () -> Unit,
   onTakePhoto: () -> Unit,
   onScanDocument: () -> Unit,
@@ -142,6 +144,17 @@ fun CreateUploadSheet(
           onNewFolder()
         },
         testTag = "sheet_new_folder",
+      )
+      SheetActionRow(
+        icon = Icons.Filled.DriveFolderUpload,
+        label = "Upload folder",
+        subtitle = if (!isOnline) "Needs internet" else "Pick device folder with subfolders & files",
+        enabled = isOnline && !isStorageFull,
+        onClick = {
+          onDismiss()
+          onUploadFolder()
+        },
+        testTag = "sheet_upload_folder",
       )
       SheetActionRow(
         icon = Icons.Filled.UploadFile,
@@ -531,18 +544,16 @@ fun FileActionsSheet(
             )
           }
         }
-        if (!file.isFolder) {
-          SheetActionRow(
-            icon = Icons.Filled.ContentCopy,
-            label = "Make a copy",
-            enabled = isOnline,
-            onClick = {
-              onDismiss()
-              onMakeCopy()
-            },
-            testTag = "action_copy",
-          )
-        }
+        SheetActionRow(
+          icon = Icons.Filled.ContentCopy,
+          label = "Make a copy",
+          enabled = isOnline,
+          onClick = {
+            onDismiss()
+            onMakeCopy()
+          },
+          testTag = "action_copy",
+        )
         SheetActionRow(
           icon = Icons.Filled.Info,
           label = "Details",
@@ -614,15 +625,16 @@ fun MoveToFolderDialog(
   onDismiss: () -> Unit,
   onMoveTo: (targetFolderId: String, targetFolderName: String) -> Unit,
 ) {
-  val candidates = remember(folders, file.id) {
+  val candidates = remember(folders, file.id, file.parentId) {
     folders.filter { it.isFolder && it.id != file.id && it.id != file.parentId }
   }
+  val canMoveToRoot = file.parentId != "root"
   AlertDialog(
     onDismissRequest = onDismiss,
     title = { Text("Move “${FormatUtils.middleEllipsis(file.name, 20)}”") },
     text = {
       Column(modifier = Modifier.fillMaxWidth().heightIn(max = 320.dp).verticalScroll(rememberScrollState())) {
-        if (file.parentId != null && file.parentId != "root") {
+        if (canMoveToRoot) {
           Row(
             modifier =
               Modifier
@@ -640,7 +652,7 @@ fun MoveToFolderDialog(
             Text("My Files (Root)", style = MaterialTheme.typography.bodyLarge)
           }
         }
-        if (candidates.isEmpty()) {
+        if (candidates.isEmpty() && !canMoveToRoot) {
           Text(
             "No other folders available yet. Create a folder in My Files first.",
             style = MaterialTheme.typography.bodyMedium,

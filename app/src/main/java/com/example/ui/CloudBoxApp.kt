@@ -287,6 +287,11 @@ private fun CloudBoxWorkspace(
       if (uris.isNotEmpty()) viewModel.enqueueUploads(uris)
     }
 
+  val uploadFolderLauncher =
+    rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
+      if (uri != null) viewModel.uploadFolderTree(uri)
+    }
+
   val photoPickerLauncher =
     rememberLauncherForActivityResult(ActivityResultContracts.PickMultipleVisualMedia()) { uris ->
       if (uris.isNotEmpty()) viewModel.enqueueUploads(uris)
@@ -765,6 +770,7 @@ private fun CloudBoxWorkspace(
       onDismiss = { showCreateSheet = false },
       onNewFolder = { showNewFolderDialog = true },
       onUploadFiles = { uploadFilesLauncher.launch(arrayOf("*/*")) },
+      onUploadFolder = { uploadFolderLauncher.launch(null) },
       onUploadMedia = {
         photoPickerLauncher.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo))
       },

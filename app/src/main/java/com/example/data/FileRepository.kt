@@ -47,6 +47,10 @@ interface FileRepository {
 
   suspend fun createFolder(name: String, parentId: String): CloudFile
 
+  suspend fun getOrCreateFolder(name: String, parentId: String): CloudFile
+
+  suspend fun copyFolder(folderId: String, newName: String, parentId: String): CloudFile
+
   suspend fun uploadFileFromUri(
     uri: Uri,
     fileName: String,
