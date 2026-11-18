@@ -259,11 +259,18 @@ class DriveFileRepository(
         return@withContext applyClientFiltersAndSort(cached, filter)
       }
       val resp = executeDriveCall {
-        api.listFiles(
-          query = "sharedWithMe = true and trashed = false",
-          orderBy = "sharedWithMeTime desc",
-          pageSize = 60,
-        )
+        try {
+          api.listFiles(
+            query = "sharedWithMe = true and trashed = false",
+            orderBy = "sharedWithMeTime desc",
+            pageSize = 60,
+          )
+        } catch (e: Exception) {
+          api.listFiles(
+            query = "trashed = false and not 'me' in owners",
+            pageSize = 60,
+          )
+        }
       }
       val items = resp.files.map { it.toDomain(offlineMap[it.id]) }
       cachedDao.upsertAll(items.map { it.toEntity(uid, isSharedWithMe = true) })
@@ -279,11 +286,19 @@ class DriveFileRepository(
         return@withContext applyClientFiltersAndSort(cached, filter)
       }
       val resp = executeDriveCall {
-        api.listFiles(
-          query = "'me' in owners and trashed = false",
-          orderBy = buildOrderBy(filter.sortField, filter.ascending),
-          pageSize = 80,
-        )
+        try {
+          api.listFiles(
+            query = "'me' in owners and trashed = false and shared = true",
+            orderBy = buildOrderBy(filter.sortField, filter.ascending),
+            pageSize = 80,
+          )
+        } catch (e: Exception) {
+          api.listFiles(
+            query = "'me' in owners and trashed = false",
+            orderBy = buildOrderBy(filter.sortField, filter.ascending),
+            pageSize = 80,
+          )
+        }
       }
       val items =
         resp.files

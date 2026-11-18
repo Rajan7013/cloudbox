@@ -1012,6 +1012,7 @@ class CloudBoxViewModel(application: Application) : AndroidViewModel(application
         emitToast("Invited ${emails.size} ${if (emails.size == 1) "person" else "people"}")
       }
       loadPermissions(fileId)
+      loadShared()
     }
   }
 
@@ -1021,6 +1022,7 @@ class CloudBoxViewModel(application: Application) : AndroidViewModel(application
       try {
         repository.updatePermissionRole(fileId, permissionId, role)
         loadPermissions(fileId)
+        loadShared()
       } catch (e: Exception) {
         emitToast(e.localizedMessage ?: "Couldn't update role")
       } finally {
@@ -1035,6 +1037,7 @@ class CloudBoxViewModel(application: Application) : AndroidViewModel(application
       try {
         repository.removePermission(fileId, permissionId)
         loadPermissions(fileId)
+        loadShared()
         emitToast("Access removed")
       } catch (e: Exception) {
         emitToast(e.localizedMessage ?: "Couldn't remove access")
@@ -1050,6 +1053,7 @@ class CloudBoxViewModel(application: Application) : AndroidViewModel(application
       try {
         val updated = repository.setAnyoneLinkAccess(fileId, enabled, role)
         _permissionsState.value = ScreenDataState.Success(updated)
+        loadShared()
       } catch (e: Exception) {
         emitToast(e.localizedMessage ?: "Couldn't update link access")
       } finally {
