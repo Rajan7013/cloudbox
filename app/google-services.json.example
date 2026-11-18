@@ -9,7 +9,7 @@
       "client_info": {
         "mobilesdk_app_id": "1:000000000000:android:0000000000000000000000",
         "android_client_info": {
-          "package_name": "com.aistudio.verdant.krmqvx"
+          "package_name": "com.rajan.cloudbox"
         }
       },
       "oauth_client": [
@@ -17,7 +17,7 @@
           "client_id": "000000000000-dummyoauthclientid1.apps.googleusercontent.com",
           "client_type": 1,
           "android_info": {
-            "package_name": "com.aistudio.verdant.krmqvx",
+            "package_name": "com.rajan.cloudbox",
             "certificate_hash": "e7803155b63a27c6c173db82555b9d214574fb88"
           }
         },
