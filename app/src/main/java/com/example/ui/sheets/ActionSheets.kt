@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -23,6 +24,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.DriveFileMove
+import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.ContentCopy
@@ -57,6 +59,7 @@ import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
@@ -707,6 +710,7 @@ fun ShareAndPermissionsSheet(
   var emailInput by remember { mutableStateOf("") }
   var inviteRole by remember { mutableStateOf(AccessRole.VIEWER) }
   var showInviteRoleMenu by remember { mutableStateOf(false) }
+  val canManageSharing = isOnline && (file.canShare || file.ownedByMe)
 
   ModalBottomSheet(
     onDismissRequest = onDismiss,
@@ -725,14 +729,15 @@ fun ShareAndPermissionsSheet(
       Text("Share “${FormatUtils.middleEllipsis(file.name, 22)}”", style = MaterialTheme.typography.headlineSmall)
       Spacer(modifier = Modifier.height(14.dp))
 
-      if (!file.canShare) {
+      if (!canManageSharing) {
         Surface(
           color = MaterialTheme.colorScheme.surfaceVariant,
           shape = RoundedCornerShape(12.dp),
           modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp),
         ) {
           Text(
-            "Only the owner or an editor can change who has access.",
+            if (!isOnline) "You are currently offline. Connect to the internet to change permissions."
+            else "Only the owner or an editor can change who has access.",
             style = MaterialTheme.typography.bodySmall,
             modifier = Modifier.padding(12.dp),
           )
@@ -746,7 +751,7 @@ fun ShareAndPermissionsSheet(
           onValueChange = { emailInput = it },
           label = { Text("Add people by email") },
           placeholder = { Text("name@example.com") },
-          enabled = isOnline && file.canShare && !isBusy,
+          enabled = canManageSharing && !isBusy,
           singleLine = true,
           shape = RoundedCornerShape(14.dp),
           modifier = Modifier.weight(1f).testTag("share_email_input"),
@@ -754,16 +759,19 @@ fun ShareAndPermissionsSheet(
         Box {
           OutlinedButton(
             onClick = { showInviteRoleMenu = true },
-            enabled = isOnline && file.canShare,
+            enabled = canManageSharing && !isBusy,
             shape = RoundedCornerShape(12.dp),
             modifier = Modifier.height(52.dp),
           ) {
             Text(inviteRole.label)
+            Spacer(modifier = Modifier.width(4.dp))
+            Icon(Icons.Filled.ArrowDropDown, contentDescription = null, modifier = Modifier.size(18.dp))
           }
           DropdownMenu(expanded = showInviteRoleMenu, onDismissRequest = { showInviteRoleMenu = false }) {
             listOf(AccessRole.VIEWER, AccessRole.COMMENTER, AccessRole.EDITOR).forEach { r ->
               DropdownMenuItem(
                 text = { Text(r.label) },
+                trailingIcon = { if (r == inviteRole) Icon(Icons.Filled.Check, contentDescription = null) },
                 onClick = {
                   inviteRole = r
                   showInviteRoleMenu = false
@@ -786,7 +794,7 @@ fun ShareAndPermissionsSheet(
           onInvite(parsedEmails, inviteRole)
           emailInput = ""
         },
-        enabled = isOnline && file.canShare && !isBusy && parsedEmails.isNotEmpty(),
+        enabled = canManageSharing && !isBusy && parsedEmails.isNotEmpty(),
         modifier = Modifier.fillMaxWidth().height(48.dp).testTag("share_invite_button"),
         shape = RoundedCornerShape(14.dp),
       ) {
@@ -796,7 +804,7 @@ fun ShareAndPermissionsSheet(
           Icon(Icons.Filled.PersonAdd, contentDescription = null, modifier = Modifier.size(18.dp))
           Spacer(modifier = Modifier.width(8.dp))
           Text(
-            if (parsedEmails.size > 1) "Invite ${parsedEmails.size} people" else "Invite",
+            if (parsedEmails.size > 1) "Invite ${parsedEmails.size} people as ${inviteRole.label}" else "Invite as ${inviteRole.label}",
           )
         }
       }
@@ -807,7 +815,7 @@ fun ShareAndPermissionsSheet(
 
       when (permissionsState) {
         is ScreenDataState.Loading -> {
-          Row(verticalAlignment = Alignment.CenterVertically) {
+          Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(vertical = 8.dp)) {
             CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
             Spacer(modifier = Modifier.width(10.dp))
             Text("Loading permissions…", style = MaterialTheme.typography.bodyMedium)
@@ -836,7 +844,7 @@ fun ShareAndPermissionsSheet(
                 name = perm.displayName ?: perm.emailAddress ?: "Collaborator",
                 email = perm.emailAddress ?: "",
                 role = perm.role,
-                canModify = isOnline && file.canShare && perm.role != AccessRole.OWNER && !isBusy,
+                canModify = canManageSharing && perm.role != AccessRole.OWNER && !isBusy,
                 onChangeRole = { newRole -> onChangeRole(perm.id, newRole) },
                 onRemove = { onRemovePermission(perm.id) },
               )
@@ -852,34 +860,88 @@ fun ShareAndPermissionsSheet(
             color = MaterialTheme.colorScheme.background,
             border = BorderStroke(1.dp, extra.border),
           ) {
-            Row(
-              modifier = Modifier.fillMaxWidth().padding(14.dp),
-              verticalAlignment = Alignment.CenterVertically,
-            ) {
-              Icon(
-                imageVector = if (anyonePerm != null) Icons.Filled.Public else Icons.Filled.Lock,
-                contentDescription = null,
-                tint = if (anyonePerm != null) extra.success else extra.textSecondary,
-              )
-              Spacer(modifier = Modifier.width(12.dp))
-              Column(modifier = Modifier.weight(1f)) {
-                Text(
-                  text = if (anyonePerm != null) "Anyone with the link" else "Restricted",
-                  style = MaterialTheme.typography.labelLarge,
+            Column(modifier = Modifier.fillMaxWidth().padding(14.dp)) {
+              Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+              ) {
+                Icon(
+                  imageVector = if (anyonePerm != null) Icons.Filled.Public else Icons.Filled.Lock,
+                  contentDescription = null,
+                  tint = if (anyonePerm != null) extra.success else extra.textSecondary,
                 )
-                Text(
-                  text =
-                    if (anyonePerm != null) "Anyone on the internet with link can ${anyonePerm.role.label.lowercase()}"
-                    else "Only people with access can open",
-                  style = MaterialTheme.typography.bodySmall,
-                  color = extra.textSecondary,
+                Spacer(modifier = Modifier.width(12.dp))
+                Column(modifier = Modifier.weight(1f)) {
+                  Text(
+                    text = if (anyonePerm != null) "Anyone with the link" else "Restricted",
+                    style = MaterialTheme.typography.labelLarge,
+                  )
+                  Text(
+                    text =
+                      if (anyonePerm != null) "Anyone on the internet with this link can ${anyonePerm.role.label.lowercase()}"
+                      else "Only people with access can open",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = extra.textSecondary,
+                  )
+                }
+                Switch(
+                  checked = anyonePerm != null,
+                  enabled = canManageSharing && !isBusy,
+                  onCheckedChange = { enabled ->
+                    onSetAnyoneLink(enabled, anyonePerm?.role ?: AccessRole.VIEWER)
+                  },
                 )
               }
-              Switch(
-                checked = anyonePerm != null,
-                enabled = isOnline && file.canShare && !isBusy,
-                onCheckedChange = { enabled -> onSetAnyoneLink(enabled, AccessRole.VIEWER) },
-              )
+
+              if (anyonePerm != null) {
+                Spacer(modifier = Modifier.height(10.dp))
+                HorizontalDivider(color = extra.border.copy(alpha = 0.5f))
+                Spacer(modifier = Modifier.height(10.dp))
+                Row(
+                  modifier = Modifier.fillMaxWidth(),
+                  verticalAlignment = Alignment.CenterVertically,
+                  horizontalArrangement = Arrangement.SpaceBetween,
+                ) {
+                  Text(
+                    "Link access role",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = extra.textSecondary,
+                  )
+                  var showLinkRoleMenu by remember { mutableStateOf(false) }
+                  Box {
+                    OutlinedButton(
+                      onClick = { showLinkRoleMenu = true },
+                      enabled = canManageSharing && !isBusy,
+                      shape = RoundedCornerShape(10.dp),
+                      contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
+                      modifier = Modifier.height(36.dp),
+                    ) {
+                      Text(anyonePerm.role.label, style = MaterialTheme.typography.labelMedium)
+                      Spacer(modifier = Modifier.width(4.dp))
+                      Icon(Icons.Filled.ArrowDropDown, contentDescription = null, modifier = Modifier.size(16.dp))
+                    }
+                    DropdownMenu(
+                      expanded = showLinkRoleMenu,
+                      onDismissRequest = { showLinkRoleMenu = false },
+                    ) {
+                      listOf(AccessRole.VIEWER, AccessRole.COMMENTER, AccessRole.EDITOR).forEach { roleOption ->
+                        DropdownMenuItem(
+                          text = { Text(roleOption.label) },
+                          trailingIcon = {
+                            if (roleOption == anyonePerm.role) {
+                              Icon(Icons.Filled.Check, contentDescription = null)
+                            }
+                          },
+                          onClick = {
+                            showLinkRoleMenu = false
+                            onSetAnyoneLink(true, roleOption)
+                          },
+                        )
+                      }
+                    }
+                  }
+                }
+              }
             }
           }
 
@@ -931,32 +993,70 @@ private fun PermissionPersonRow(
         Text(email, style = MaterialTheme.typography.bodySmall, color = LocalCloudBoxColors.current.textSecondary)
       }
     }
-    Box {
-      TextButton(
-        onClick = { if (canModify) menuOpen = true },
-        enabled = canModify || role == AccessRole.OWNER,
+    if (role == AccessRole.OWNER) {
+      Surface(
+        color = MaterialTheme.colorScheme.surfaceVariant,
+        shape = RoundedCornerShape(8.dp),
       ) {
-        Text(role.label)
+        Text(
+          text = "Owner",
+          style = MaterialTheme.typography.labelSmall,
+          modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
+          color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
       }
-      DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
-        listOf(AccessRole.VIEWER, AccessRole.COMMENTER, AccessRole.EDITOR).forEach { r ->
-          DropdownMenuItem(
-            text = { Text(r.label) },
-            trailingIcon = { if (r == role) Icon(Icons.Filled.Check, contentDescription = null) },
-            onClick = {
-              menuOpen = false
-              onChangeRole(r)
-            },
+    } else {
+      Row(verticalAlignment = Alignment.CenterVertically) {
+        Box {
+          OutlinedButton(
+            onClick = { if (canModify) menuOpen = true },
+            enabled = canModify,
+            shape = RoundedCornerShape(10.dp),
+            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
+            modifier = Modifier.height(36.dp),
+          ) {
+            Text(role.label, style = MaterialTheme.typography.labelMedium)
+            Spacer(modifier = Modifier.width(4.dp))
+            Icon(Icons.Filled.ArrowDropDown, contentDescription = null, modifier = Modifier.size(16.dp))
+          }
+          DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
+            listOf(AccessRole.VIEWER, AccessRole.COMMENTER, AccessRole.EDITOR).forEach { r ->
+              DropdownMenuItem(
+                text = { Text(r.label) },
+                trailingIcon = { if (r == role) Icon(Icons.Filled.Check, contentDescription = null) },
+                onClick = {
+                  menuOpen = false
+                  onChangeRole(r)
+                },
+              )
+            }
+            HorizontalDivider()
+            DropdownMenuItem(
+              text = { Text("Remove access", color = MaterialTheme.colorScheme.error) },
+              leadingIcon = {
+                Icon(Icons.Filled.DeleteOutline, contentDescription = null, tint = MaterialTheme.colorScheme.error)
+              },
+              onClick = {
+                menuOpen = false
+                onRemove()
+              },
+            )
+          }
+        }
+
+        Spacer(modifier = Modifier.width(4.dp))
+        IconButton(
+          onClick = onRemove,
+          enabled = canModify,
+          modifier = Modifier.size(36.dp),
+        ) {
+          Icon(
+            imageVector = Icons.Filled.DeleteOutline,
+            contentDescription = "Remove access",
+            tint = if (canModify) MaterialTheme.colorScheme.error else LocalCloudBoxColors.current.textSecondary.copy(alpha = 0.4f),
+            modifier = Modifier.size(20.dp),
           )
         }
-        HorizontalDivider()
-        DropdownMenuItem(
-          text = { Text("Remove access", color = MaterialTheme.colorScheme.error) },
-          onClick = {
-            menuOpen = false
-            onRemove()
-          },
-        )
       }
     }
   }

@@ -112,6 +112,12 @@ interface DriveApiService {
     @Query("supportsAllDrives") supportsAllDrives: Boolean = true,
   ): Response<Unit>
 
+  @DELETE("drive/v3/files/{fileId}/permissions/{permissionId}")
+  suspend fun deletePermissionDirect(
+    @Path("fileId") fileId: String,
+    @Path("permissionId") permissionId: String,
+  ): Response<Unit>
+
   @Streaming
   @GET("drive/v3/files/{fileId}")
   suspend fun downloadFileContent(

@@ -83,9 +83,11 @@ class DriveFileRepository(
           try {
             return block()
           } catch (retryHttp: HttpException) {
+            val retryBody = retryHttp.response()?.errorBody()?.string()
+            val parsedMsg = clientProvider.parseErrorMessage(retryBody)
             throw DriveApiException(
               retryHttp.code(),
-              DriveClientProvider.friendlyMessageForCode(retryHttp.code()),
+              parsedMsg ?: DriveClientProvider.friendlyMessageForCode(retryHttp.code()),
             )
           }
         }
@@ -93,7 +95,8 @@ class DriveFileRepository(
       }
       val errBody = http.response()?.errorBody()?.string()
       Log.w("DriveRepo", "Drive HTTP $code: $errBody")
-      throw DriveApiException(code, DriveClientProvider.friendlyMessageForCode(code))
+      val parsedMsg = clientProvider.parseErrorMessage(errBody)
+      throw DriveApiException(code, parsedMsg ?: DriveClientProvider.friendlyMessageForCode(code))
     } catch (e: DriveApiException) {
       throw e
     } catch (e: IOException) {
@@ -584,21 +587,49 @@ class DriveFileRepository(
     expirationIso: String?,
   ): SharePermission =
     withContext(Dispatchers.IO) {
+      val trimmedId = permissionId.trim()
       val dto = executeDriveCall {
-        api.updatePermission(
-          fileId = fileId,
-          permissionId = permissionId,
-          body = DriveUpdatePermissionRequest(role = role.apiRole, expirationTime = expirationIso),
-        )
+        try {
+          api.updatePermission(
+            fileId = fileId,
+            permissionId = trimmedId,
+            body = DriveUpdatePermissionRequest(role = role.apiRole, expirationTime = expirationIso),
+            supportsAllDrives = true,
+          )
+        } catch (_: Exception) {
+          api.updatePermission(
+            fileId = fileId,
+            permissionId = trimmedId,
+            body = DriveUpdatePermissionRequest(role = role.apiRole, expirationTime = expirationIso),
+            supportsAllDrives = false,
+          )
+        }
       }
       dto.toSharePermission()
     }
 
   override suspend fun removePermission(fileId: String, permissionId: String) {
     withContext(Dispatchers.IO) {
+      val trimmedId = permissionId.trim()
       executeDriveCall {
-        val resp = api.deletePermission(fileId, permissionId)
-        if (!resp.isSuccessful) throw HttpException(resp)
+        val resp =
+          try {
+            api.deletePermission(fileId, trimmedId, supportsAllDrives = true)
+          } catch (_: Exception) {
+            api.deletePermissionDirect(fileId, trimmedId)
+          }
+        if (!resp.isSuccessful) {
+          if (resp.code() == 400 || resp.code() == 404) {
+            val fallback = api.deletePermissionDirect(fileId, trimmedId)
+            if (fallback.isSuccessful) return@executeDriveCall
+            val raw = fallback.errorBody()?.string()
+            val msg = clientProvider.parseErrorMessage(raw) ?: DriveClientProvider.friendlyMessageForCode(fallback.code())
+            throw DriveApiException(fallback.code(), msg)
+          }
+          val raw = resp.errorBody()?.string()
+          val msg = clientProvider.parseErrorMessage(raw) ?: DriveClientProvider.friendlyMessageForCode(resp.code())
+          throw DriveApiException(resp.code(), msg)
+        }
       }
     }
   }
@@ -619,7 +650,7 @@ class DriveFileRepository(
               body = DriveCreatePermissionRequest(type = "anyone", role = role.apiRole, allowFileDiscovery = false),
             )
           }
-        } else if (existingAnyone.role != role) {
+        } else {
           updatePermissionRole(fileId, existingAnyone.id, role)
         }
       } else if (existingAnyone != null) {

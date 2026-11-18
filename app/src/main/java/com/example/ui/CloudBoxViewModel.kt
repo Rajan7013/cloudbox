@@ -1128,18 +1128,20 @@ class CloudBoxViewModel(application: Application) : AndroidViewModel(application
     viewModelScope.launch {
       _isShareBusy.value = true
       var lastError: String? = null
+      var successCount = 0
       emails.forEach { email ->
         try {
           repository.inviteCollaborator(fileId, email, role)
+          successCount++
         } catch (e: Exception) {
           lastError = e.localizedMessage ?: "Couldn't share. Check $email"
         }
       }
       _isShareBusy.value = false
-      if (lastError != null) {
-        emitToast(lastError!!)
+      if (lastError != null && successCount == 0) {
+        emitToast(lastError)
       } else {
-        emitToast("Invited ${emails.size} ${if (emails.size == 1) "person" else "people"}")
+        emitToast("Invited $successCount ${if (successCount == 1) "person" else "people"} as ${role.label}")
       }
       loadPermissions(fileId)
       loadShared()
@@ -1149,11 +1151,21 @@ class CloudBoxViewModel(application: Application) : AndroidViewModel(application
   fun changePermissionRole(fileId: String, permissionId: String, role: AccessRole) {
     viewModelScope.launch {
       _isShareBusy.value = true
+      val previousList = (_permissionsState.value as? ScreenDataState.Success)?.data
+      if (previousList != null) {
+        _permissionsState.value = ScreenDataState.Success(
+          previousList.map { if (it.id == permissionId) it.copy(role = role) else it }
+        )
+      }
       try {
         repository.updatePermissionRole(fileId, permissionId, role)
         loadPermissions(fileId)
         loadShared()
+        emitToast("Role updated to ${role.label}")
       } catch (e: Exception) {
+        if (previousList != null) {
+          _permissionsState.value = ScreenDataState.Success(previousList)
+        }
         emitToast(e.localizedMessage ?: "Couldn't update role")
       } finally {
         _isShareBusy.value = false
@@ -1164,12 +1176,19 @@ class CloudBoxViewModel(application: Application) : AndroidViewModel(application
   fun removePermission(fileId: String, permissionId: String) {
     viewModelScope.launch {
       _isShareBusy.value = true
+      val previousList = (_permissionsState.value as? ScreenDataState.Success)?.data
+      if (previousList != null) {
+        _permissionsState.value = ScreenDataState.Success(previousList.filter { it.id != permissionId })
+      }
       try {
         repository.removePermission(fileId, permissionId)
         loadPermissions(fileId)
         loadShared()
         emitToast("Access removed")
       } catch (e: Exception) {
+        if (previousList != null) {
+          _permissionsState.value = ScreenDataState.Success(previousList)
+        }
         emitToast(e.localizedMessage ?: "Couldn't remove access")
       } finally {
         _isShareBusy.value = false
@@ -1184,6 +1203,7 @@ class CloudBoxViewModel(application: Application) : AndroidViewModel(application
         val updated = repository.setAnyoneLinkAccess(fileId, enabled, role)
         _permissionsState.value = ScreenDataState.Success(updated)
         loadShared()
+        emitToast(if (enabled) "Anyone with the link can now ${role.label.lowercase()}" else "General access: Restricted")
       } catch (e: Exception) {
         emitToast(e.localizedMessage ?: "Couldn't update link access")
       } finally {

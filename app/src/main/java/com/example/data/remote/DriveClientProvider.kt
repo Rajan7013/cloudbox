@@ -189,14 +189,18 @@ class DriveClientProvider(
     }
   }
 
+  fun parseErrorMessage(raw: String?): String? {
+    if (raw.isNullOrBlank()) return null
+    return try {
+      moshi.adapter(DriveErrorEnvelope::class.java).fromJson(raw)?.error?.message
+    } catch (_: Exception) {
+      null
+    }
+  }
+
   private fun parseDriveError(resp: Response): DriveApiException {
     val raw = resp.body?.string().orEmpty()
-    val parsedMsg =
-      try {
-        moshi.adapter(DriveErrorEnvelope::class.java).fromJson(raw)?.error?.message
-      } catch (_: Exception) {
-        null
-      }
+    val parsedMsg = parseErrorMessage(raw)
     return DriveApiException(
       code = resp.code,
       message = parsedMsg ?: friendlyMessageForCode(resp.code),
