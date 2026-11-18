@@ -96,6 +96,7 @@ import com.example.model.AuthSessionState
 import com.example.model.CloudFile
 import com.example.model.DriveUser
 import com.example.model.ScreenDataState
+import com.example.ui.components.AppUpdateDialog
 import com.example.ui.components.FileTypeTile
 import com.example.ui.components.OfflineStatusBanner
 import com.example.ui.components.UploadProgressOverlayCard
@@ -855,6 +856,18 @@ private fun CloudBoxWorkspace(
       folders = availableFolders,
       onDismiss = { moveDialogFile = null },
       onMoveTo = { targetId, targetName -> viewModel.moveFile(file, targetId, targetName) },
+    )
+  }
+
+  val availableUpdate by viewModel.availableUpdate.collectAsStateWithLifecycle()
+  val updateDownloadProgress by viewModel.updateDownloadProgress.collectAsStateWithLifecycle()
+
+  availableUpdate?.let { updateInfo ->
+    AppUpdateDialog(
+      updateInfo = updateInfo,
+      downloadProgress = updateDownloadProgress,
+      onDismiss = { viewModel.dismissUpdateDialog() },
+      onStartUpdate = { viewModel.startAppUpdate() },
     )
   }
 }

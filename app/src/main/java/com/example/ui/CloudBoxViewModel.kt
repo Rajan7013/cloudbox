@@ -42,6 +42,8 @@ import com.example.model.ThemePreference
 import com.example.model.UploadStatus
 import com.example.model.UploadTaskState
 import com.example.model.ViewMode
+import com.example.util.AppUpdateInfo
+import com.example.util.AppUpdateManager
 import com.example.util.DocumentScannerUtil
 import com.example.util.FormatUtils
 import com.google.android.gms.auth.api.identity.AuthorizationResult
@@ -80,6 +82,13 @@ class CloudBoxViewModel(application: Application) : AndroidViewModel(application
   val networkStatus: StateFlow<NetworkStatus> = networkMonitor.status
   val settings: StateFlow<CloudBoxSettings> =
     settingsRepo.settingsFlow.stateIn(viewModelScope, SharingStarted.Eagerly, CloudBoxSettings())
+
+  val updateManager = AppUpdateManager(appContext)
+  private val _availableUpdate = MutableStateFlow<AppUpdateInfo?>(null)
+  val availableUpdate: StateFlow<AppUpdateInfo?> = _availableUpdate.asStateFlow()
+
+  private val _updateDownloadProgress = MutableStateFlow<Float?>(null)
+  val updateDownloadProgress: StateFlow<Float?> = _updateDownloadProgress.asStateFlow()
 
   val offlineFiles: StateFlow<List<CloudFile>> =
     repository.observeOfflineFiles().stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
@@ -242,6 +251,7 @@ class CloudBoxViewModel(application: Application) : AndroidViewModel(application
   fun initializeSession(credentialManager: CredentialManager) {
     _splashTimedOut.value = false
     _authState.value = AuthSessionState.Checking
+    checkForAppUpdates()
     val currentUser = Firebase.auth.currentUser
     if (currentUser != null) {
       checkDriveAuthorization(currentUser.toDriveUser())
@@ -254,6 +264,39 @@ class CloudBoxViewModel(application: Application) : AndroidViewModel(application
       onUnauthenticated = { _authState.value = AuthSessionState.SignedOut },
       scope = viewModelScope,
     )
+  }
+
+  fun checkForAppUpdates() {
+    viewModelScope.launch {
+      try {
+        val info = updateManager.checkForUpdate()
+        if (info != null) {
+          _availableUpdate.value = info
+        }
+      } catch (_: Exception) {}
+    }
+  }
+
+  fun dismissUpdateDialog() {
+    _availableUpdate.value = null
+  }
+
+  fun startAppUpdate() {
+    val info = _availableUpdate.value ?: return
+    _updateDownloadProgress.value = 0f
+    viewModelScope.launch {
+      try {
+        val apkFile = updateManager.downloadApk(info.apkUrl) { progress ->
+          _updateDownloadProgress.value = progress
+        }
+        _updateDownloadProgress.value = null
+        _availableUpdate.value = null
+        updateManager.triggerInstall(apkFile)
+      } catch (e: Exception) {
+        _updateDownloadProgress.value = null
+        emitToast("Update failed: ${e.localizedMessage}")
+      }
+    }
   }
 
   fun signInWithGoogle(activityContext: Context, credentialManager: CredentialManager) {
