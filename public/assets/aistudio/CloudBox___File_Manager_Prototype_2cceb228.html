@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>CloudBox – File Manager Prototype</title>
+<style>
+:root{--bg:#F5F6FB;--card:#fff;--tx:#161B2E;--mu:#6B7190;--pr:#4F46E5;--pr2:#EEF0FF;--bd:#E7E9F4;--sh:0 6px 20px rgba(60,60,120,.09);--out:#E4E6F2;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media(prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0E1020;--card:#1A1D33;--tx:#EEF0FF;--mu:#9296B5;--pr:#7C83FF;--pr2:#24284A;--bd:#2A2E4F;--sh:0 6px 20px rgba(0,0,0,.4);--out:#05060F}}
+:root[data-theme="dark"]{--bg:#0E1020;--card:#1A1D33;--tx:#EEF0FF;--mu:#9296B5;--pr:#7C83FF;--pr2:#24284A;--bd:#2A2E4F;--sh:0 6px 20px rgba(0,0,0,.4);--out:#05060F}
+*{box-sizing:border-box;margin:0;-webkit-tap-highlight-color:transparent}
+html,body{height:100%}
+body{background:var(--out);font-family:Inter,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;color:var(--tx);display:flex;align-items:center;justify-content:center}
+#app{position:relative;width:390px;height:min(844px,100%);background:var(--bg);border-radius:32px;overflow:hidden;display:flex;flex-direction:column;box-shadow:0 20px 60px rgba(0,0,0,.35)}
+@media(max-width:430px){#app{width:100%;height:100%;border-radius:0}}
+#screen{flex:1;overflow-y:auto;padding:16px 18px 96px}
+button{font:inherit;color:inherit;border:0;background:none;cursor:pointer}
+input{font:inherit;color:var(--tx)}
+.top{display:flex;align-items:center;gap:10px;margin-bottom:14px}
+.top h1{font-size:22px;font-weight:700;flex:1}
+.av{width:38px;height:38px;border-radius:50%;background:linear-gradient(135deg,#6366F1,#EC4899);color:#fff;font-weight:700;display:grid;place-items:center}
+.ib{width:40px;height:40px;border-radius:12px;background:var(--card);box-shadow:var(--sh);display:grid;place-items:center;font-size:17px}
+.search{display:flex;gap:8px;align-items:center;background:var(--card);border-radius:16px;padding:12px 14px;box-shadow:var(--sh);color:var(--mu);margin-bottom:14px;width:100%}
+.search input{flex:1;border:0;background:none;outline:0}
+.sec{display:flex;justify-content:space-between;align-items:center;margin:18px 0 10px;font-weight:700}
+.sec small{color:var(--pr);font-weight:600;font-size:13px}
+.hero{background:linear-gradient(135deg,#4F46E5,#8B5CF6);color:#fff;border-radius:22px;padding:18px;box-shadow:var(--sh)}
+.bar{height:8px;background:rgba(255,255,255,.25);border-radius:9px;overflow:hidden;margin:10px 0 6px}
+.bar i{display:block;height:100%;background:#fff;border-radius:9px}
+.chips{display:flex;gap:8px;overflow-x:auto;padding-bottom:4px}
+.chip{flex:none;padding:8px 14px;border-radius:20px;background:var(--card);box-shadow:var(--sh);font-size:13px;font-weight:600}
+.chip.on{background:var(--pr);color:#fff}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.card{background:var(--card);border-radius:18px;padding:12px;box-shadow:var(--sh);position:relative;text-align:left}
+.th{height:74px;border-radius:12px;display:grid;place-items:center;font-size:32px;margin-bottom:10px}
+.nm{font-weight:600;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.mt{font-size:12px;color:var(--mu);margin-top:2px}
+.row{display:flex;align-items:center;gap:12px;background:var(--card);border-radius:16px;padding:10px 12px;box-shadow:var(--sh);margin-bottom:10px;width:100%;text-align:left}
+.row .th{width:44px;height:44px;margin:0;font-size:22px;flex:none}
+.row .in{flex:1;min-width:0}
+.dots{padding:6px 8px;color:var(--mu);font-weight:700;font-size:18px}
+.crumb{display:flex;gap:6px;align-items:center;font-size:13px;color:var(--mu);margin-bottom:12px;flex-wrap:wrap}
+.crumb b{color:var(--pr);cursor:pointer}
+.tabs{position:absolute;left:0;right:0;bottom:0;background:var(--card);display:flex;justify-content:space-around;padding:10px 6px calc(12px + env(safe-area-inset-bottom,0px));border-top:1px solid var(--bd)}
+.tab{display:flex;flex-direction:column;align-items:center;gap:2px;font-size:11px;color:var(--mu);width:64px}
+.tab span{font-size:20px}.tab.on{color:var(--pr);font-weight:700}
+.fab{position:absolute;right:20px;bottom:88px;width:58px;height:58px;border-radius:20px;background:var(--pr);color:#fff;font-size:30px;box-shadow:0 10px 24px rgba(79,70,229,.5);display:grid;place-items:center}
+.ov{position:absolute;inset:0;background:rgba(10,12,30,.5);display:flex;align-items:flex-end;z-index:20}
+.sheet{background:var(--card);width:100%;border-radius:26px 26px 0 0;padding:10px 18px 26px;max-height:85%;overflow-y:auto;animation:up .22s ease}
+@keyframes up{from{transform:translateY(60%);opacity:.4}}
+.grab{width:42px;height:5px;border-radius:5px;background:var(--bd);margin:0 auto 14px}
+.sheet h3{margin-bottom:12px}
+.act{display:flex;align-items:center;gap:14px;padding:12px 4px;width:100%;text-align:left;font-weight:500;border-radius:12px}
+.act:active{background:var(--pr2)}
+.act span{width:36px;height:36px;border-radius:12px;background:var(--pr2);display:grid;place-items:center}
+.btn{background:var(--pr);color:#fff;padding:13px;border-radius:14px;font-weight:700;width:100%;margin-top:10px}
+.btn.g{background:var(--pr2);color:var(--pr)}
+.fld{width:100%;border:1.5px solid var(--bd);background:var(--bg);border-radius:14px;padding:12px;outline:0}
+select{background:var(--pr2);color:var(--pr);border:0;border-radius:10px;padding:6px 8px;font-weight:600}
+.tg{width:46px;height:26px;border-radius:20px;background:var(--bd);position:relative;flex:none}
+.tg i{position:absolute;top:3px;left:3px;width:20px;height:20px;border-radius:50%;background:#fff;transition:.2s}
+.tg.on{background:var(--pr)}.tg.on i{left:23px}
+.toast{position:absolute;left:18px;right:18px;bottom:96px;background:#1c2040;color:#fff;border-radius:16px;padding:12px 14px;z-index:30;font-size:14px;box-shadow:var(--sh)}
+.toast .bar{background:rgba(255,255,255,.2);margin:8px 0 0}
+.login{display:flex;flex-direction:column;justify-content:center;min-height:100%;text-align:center;gap:14px}
+.logo{width:92px;height:92px;border-radius:28px;margin:0 auto;background:linear-gradient(135deg,#4F46E5,#EC4899);display:grid;place-items:center;font-size:44px;box-shadow:0 14px 34px rgba(79,70,229,.45)}
+.dotsw{display:flex;gap:6px;justify-content:center}.dotsw i{width:8px;height:8px;border-radius:8px;background:var(--bd)}.dotsw i.on{width:24px;background:var(--pr)}
+.view{height:300px;border-radius:22px;display:grid;place-items:center;font-size:90px;margin-bottom:16px;position:relative;overflow:hidden}
+.play{width:72px;height:72px;border-radius:50%;background:rgba(255,255,255,.9);color:#4F46E5;font-size:28px;display:grid;place-items:center}
+.wave{display:flex;align-items:center;gap:4px;height:90px}.wave i{width:6px;border-radius:6px;background:#fff}
+.lines i{display:block;height:9px;border-radius:6px;background:rgba(255,255,255,.7);margin:10px 0}
+.empty{text-align:center;color:var(--mu);padding:40px 0}
+.pp{display:flex;align-items:center;gap:12px;padding:8px 0}
+.pp .av{width:36px;height:36px;font-size:14px}
+.seg{display:flex;background:var(--card);border-radius:14px;padding:4px;margin-bottom:12px;box-shadow:var(--sh)}
+.seg button{flex:1;padding:9px;border-radius:11px;font-weight:600;font-size:13px;color:var(--mu)}
+.seg .on{background:var(--pr);color:#fff}
+.rb{font-size:11px;font-weight:700;padding:3px 8px;border-radius:8px;background:var(--pr2);color:var(--pr);flex:none}
+.nd{width:8px;height:8px;border-radius:50%;background:#EF4444;flex:none}
+.tbar{display:flex;gap:8px;overflow-x:auto;padding:2px 2px 8px}
+.tb{flex:none;min-width:66px;display:flex;flex-direction:column;align-items:center;gap:4px;font-size:11px;font-weight:600;padding:10px 8px;border-radius:14px;background:var(--card);box-shadow:var(--sh)}
+.tb span{font-size:18px}.tb.on{background:var(--pr);color:#fff}
+.paper{border-radius:16px;padding:20px;line-height:1.6;box-shadow:var(--sh);min-height:300px;margin-bottom:12px;transition:.2s}
+.paper p{margin:10px 0}
+mark{background:#FDE047;color:#000;border-radius:3px}
+.pn{display:flex;gap:10px;align-items:center;margin-bottom:12px;accent-color:var(--pr)}
+.ctl{margin-bottom:12px;accent-color:var(--pr)}
+.cap{position:absolute;bottom:16px;background:#000a;color:#fff;padding:4px 10px;border-radius:8px;font-size:13px}
+.tbl{border-collapse:collapse;font-size:13px;min-width:100%}
+.tbl td,.tbl th{border:1px solid var(--bd);padding:8px 10px;white-space:nowrap}
+.tbl th{background:var(--pr2);color:var(--pr)}
+.tbl td.sel{outline:2px solid var(--pr);outline-offset:-2px;background:var(--pr2)}
+.lab{font-size:12px;font-weight:700;color:var(--mu);letter-spacing:.5px;margin:18px 0 8px}
+</style></head>
+<body><div id="app"><div id="screen"></div><div id="nav"></div><div id="layer"></div></div>
+<script>
+const TY={folder:['📁','#F59E0B'],doc:['📄','#3B82F6'],sheet:['📊','#10B981'],pdf:['📕','#EF4444'],img:['🖼️','#EC4899'],video:['🎬','#8B5CF6'],audio:['🎵','#14B8A6'],zip:['🗜️','#64748B']};
+const NAMES={folder:'Folders',doc:'Documents',sheet:'Sheets',pdf:'PDFs',img:'Images',video:'Videos',audio:'Audio',zip:'Archives'};
+let uid=20;
+let items=[
+{id:1,p:0,n:'Work',t:'folder',s:0,d:5},{id:2,p:0,n:'Photos',t:'folder',s:0,d:3,sh:1},{id:3,p:0,n:'Study',t:'folder',s:0,d:9},
+{id:4,p:0,n:'Resume.pdf',t:'pdf',s:420,d:1,star:1},{id:5,p:0,n:'Budget 2026.xlsx',t:'sheet',s:310,d:2,sh:1},
+{id:6,p:0,n:'Trip video.mp4',t:'video',s:84000,d:4},{id:7,p:0,n:'Podcast ep1.mp3',t:'audio',s:9200,d:6},{id:8,p:0,n:'Notes.docx',t:'doc',s:55,d:0,star:1},
+{id:9,p:1,n:'Projects',t:'folder',s:0,d:7},{id:10,p:1,n:'Proposal.docx',t:'doc',s:120,d:2},{id:11,p:1,n:'Invoice.pdf',t:'pdf',s:210,d:3},
+{id:12,p:9,n:'App design.pdf',t:'pdf',s:1800,d:1},{id:13,p:9,n:'Backup.zip',t:'zip',s:52000,d:8},
+{id:14,p:2,n:'Beach.jpg',t:'img',s:3400,d:3},{id:15,p:2,n:'Sunset.png',t:'img',s:2800,d:5},{id:16,p:3,n:'Physics notes.pdf',t:'pdf',s:900,d:10}];
+const ST={v:'login',tab:'home',cwd:0,mode:'grid',sk:'d',dir:1,ft:'all',q:'',sel:null,onb:0,dark:null,wifi:true,off:{}};
+const $=s=>document.querySelector(s);
+const sz=k=>k?(k>=1024?(k/1024).toFixed(1)+' MB':k+' KB'):'';
+const ago=d=>d==0?'Today':d==1?'Yesterday':d+' days ago';
+const get=id=>items.find(i=>i.id==id);
+function list(f){let a=items.filter(i=>!i.tr&&f(i));if(ST.ft!='all')a=a.filter(i=>i.t==ST.ft);
+ a.sort((x,y)=>{if((x.t=='folder')!=(y.t=='folder'))return x.t=='folder'?-1:1;let r=ST.sk=='n'?x.n.localeCompare(y.n):ST.sk=='s'?x.s-y.s:ST.sk=='t'?x.t.localeCompare(y.t):y.d-x.d;return r*ST.dir});return a}
+function th(i){const[e,c]=TY[i.t];return `<div class="th" style="background:${c}22">${e}</div>`}
+function meta(i){return [i.t=='folder'?'':sz(i.s),ago(i.d)].filter(Boolean).join(' · ')+(i.sh?' · 👥':'')}
+function item(i){const star=i.star?'⭐ ':'';
+ if(ST.mode=='list')return `<div class="row" onclick="op(${i.id})">${th(i)}<div class="in"><div class="nm">${star}${i.n}</div><div class="mt">${meta(i)}</div></div><button class="dots" onclick="event.stopPropagation();act(${i.id})">⋮</button></div>`;
+ return `<div class="card" onclick="op(${i.id})">${th(i)}<div class="nm">${star}${i.n}</div><div class="mt">${meta(i)}</div><button class="dots" style="position:absolute;top:4px;right:2px" onclick="event.stopPropagation();act(${i.id})">⋮</button></div>`}
+function wrap(a){return a.length?`<div class="${ST.mode=='grid'?'grid':''}">${a.map(item).join('')}</div>`:`<div class="empty"><div style="font-size:48px">🗂️</div>Nothing here yet</div>`}
+function ctrl(){return `<div style="display:flex;gap:8px;margin-bottom:12px"><button class="chip" style="flex:1" onclick="sheet('sort')">⇅ Sort &amp; filter${ST.ft!='all'?' •':''}</button><button class="chip" onclick="ST.mode=ST.mode=='grid'?'list':'grid';go()">${ST.mode=='grid'?'☰ List':'▦ Grid'}</button></div>`}
+function crumbs(){let p=[],c=ST.cwd;while(c){p.unshift(get(c));c=get(c).p}
+ return `<div class="crumb"><b onclick="ST.cwd=0;go()">My Files</b>${p.map(x=>` › <b onclick="ST.cwd=${x.id};go()">${x.n}</b>`).join('')}</div>`}
+function topbar(t){return `<div class="top"><h1>${t}</h1><button class="ib" onclick="ST.v='search';go()">🔍</button><button class="av" onclick="ST.v='settings';go()">A</button></div>`}
+const V={
+login(){const o=[['☁️','Store everything','Documents, photos, video and audio, all in your Google Drive.'],['🤝','Share with control','Invite people as Viewer, Commenter or Editor.'],['⚡','Find it fast','Search, sort and filter in one tap.']][ST.onb];
+ return `<div class="login"><div class="logo">${o[0]}</div><h1 style="font-size:26px">${o[1]}</h1><p style="color:var(--mu);padding:0 12px">${o[2]}</p><div class="dotsw">${[0,1,2].map(i=>`<i class="${i==ST.onb?'on':''}"></i>`).join('')}</div>
+ ${ST.onb<2?`<button class="btn" onclick="ST.onb++;go()">Next</button>`:`<button class="btn" onclick="ST.v='main';go()">G&nbsp; Continue with Google</button><p class="mt">Files are saved in your Google Drive</p>`}
+ ${ST.onb<2?`<button class="mt" onclick="ST.onb=2;go()">Skip</button>`:''}</div>`},
+home(){const used=Math.round(items.reduce((a,i)=>a+i.s,0)/1024);const rec=list(i=>i.t!='folder').sort((a,b)=>a.d-b.d).slice(0,4);
+ return topbar('Hello, Alex 👋')+`<button class="search" onclick="ST.v='search';go()">🔍 <span>Search in CloudBox</span></button>
+ <div class="hero"><div style="opacity:.85;font-size:13px">Google Drive storage</div><div style="font-size:26px;font-weight:700">${used} MB <span style="font-size:14px;opacity:.8">of 15 GB</span></div><div class="bar"><i style="width:${Math.max(4,used/150)}%"></i></div><div style="font-size:12px;opacity:.85;display:flex;justify-content:space-between"><span>Docs · Images · Video</span><button style="color:#fff;font-weight:700" onclick="ST.v='storage';go()">Details ›</button></div></div>
+ <div class="sec">Quick access</div><div class="chips">${['img','video','audio','pdf','doc','zip'].map(t=>`<button class="chip" onclick="ST.ft='${t}';ST.tab='files';ST.cwd=0;go()">${TY[t][0]} ${NAMES[t]}</button>`).join('')}</div>
+ <div class="sec">Recent <small onclick="ST.tab='files';go()">See all</small></div>${wrap(rec)}`},
+files(){return topbar('My Files')+crumbs()+ctrl()+wrap(list(i=>i.p==ST.cwd))},
+shared(){return topbar('Shared')+`<div class="chips" style="margin-bottom:12px"><span class="chip on">Shared by me</span><span class="chip">Shared with me</span></div>`+wrap(list(i=>i.sh))+`<div class="sec">Shared with me</div><div class="row"><div class="th" style="background:#3B82F622">📄</div><div class="in"><div class="nm">Team plan.docx</div><div class="mt">Riya shared · Editor</div></div></div><div class="row"><div class="th" style="background:#EC489922">🖼️</div><div class="in"><div class="nm">Brand kit.png</div><div class="mt">Sam shared · Viewer</div></div></div>`},
+starred(){return topbar('Starred')+ctrl()+wrap(list(i=>i.star))},
+search(){const q=ST.q.toLowerCase();const r=q||ST.ft!='all'?list(i=>i.n.toLowerCase().includes(q)):[];
+ return `<div class="top"><button class="ib" onclick="ST.v='main';ST.ft='all';ST.q='';go()">←</button><div class="search" style="margin:0"><span>🔍</span><input id="qi" placeholder="Search files and folders" value="${ST.q}" oninput="ST.q=this.value;sr()"></div></div>
+ <div class="chips" style="margin-bottom:12px">${['all','doc','pdf','img','video','audio','folder'].map(t=>`<button class="chip ${ST.ft==t?'on':''}" onclick="ST.ft='${t}';go(1)">${t=='all'?'All':NAMES[t]}</button>`).join('')}</div>
+ <div id="res">${q||ST.ft!='all'?wrap(r):`<div class="sec">Recent searches</div>${['invoice','budget','photos'].map(x=>`<button class="row" onclick="ST.q='${x}';go(1)">🕘 ${x}</button>`).join('')}`}</div>`},
+trash(){const a=items.filter(i=>i.tr);return `<div class="top"><button class="ib" onclick="ST.v='settings';go()">←</button><h1>Trash</h1></div><p class="mt" style="margin-bottom:12px">Items are deleted forever after 30 days.</p>`+(a.length?a.map(i=>`<div class="row">${th(i)}<div class="in"><div class="nm">${i.n}</div><div class="mt">${meta(i)}</div></div><button class="chip" onclick="get(${i.id}).tr=0;go()">Restore</button><button class="dots" onclick="items=items.filter(x=>x.id!=${i.id});go()">🗑</button></div>`).join('')+`<button class="btn g" onclick="items=items.filter(i=>!i.tr);go()">Empty trash</button>`:`<div class="empty"><div style="font-size:48px">🗑️</div>Trash is empty</div>`)},
+storage(){const tot=items.reduce((a,i)=>a+i.s,0)||1;const by={};items.forEach(i=>by[i.t]=(by[i.t]||0)+i.s);
+ return `<div class="top"><button class="ib" onclick="ST.v='main';go()">←</button><h1>Storage</h1></div><div class="hero"><div style="font-size:30px;font-weight:700">${Math.round(tot/1024)} MB</div><div style="opacity:.85">used of 15 GB</div></div><div class="sec">By type</div>`+Object.keys(by).filter(k=>by[k]).sort((a,b)=>by[b]-by[a]).map(k=>`<div class="row"><div class="th" style="background:${TY[k][1]}22">${TY[k][0]}</div><div class="in"><div class="nm">${NAMES[k]}</div><div style="height:6px;border-radius:6px;background:var(--bd);margin-top:6px"><i style="display:block;height:100%;border-radius:6px;width:${by[k]/tot*100}%;background:${TY[k][1]}"></i></div></div><div class="mt">${sz(by[k])}</div></div>`).join('')},
+settings(){const dk=ST.dark===null?matchMedia('(prefers-color-scheme:dark)').matches:ST.dark;
+ const tg=(l,on,f)=>`<div class="row" onclick="${f}"><div class="in nm">${l}</div><div class="tg ${on?'on':''}"><i></i></div></div>`;
+ return `<div class="top"><button class="ib" onclick="ST.v='main';go()">←</button><h1>Settings</h1></div><div class="row"><div class="av" style="width:54px;height:54px;font-size:22px">A</div><div class="in"><div class="nm">Alex Kumar</div><div class="mt">alex@gmail.com · Google Drive linked</div></div></div>
+ <div class="sec">Preferences</div>${tg('Dark mode',dk,"ST.dark=!"+dk+";document.documentElement.dataset.theme=ST.dark?'dark':'light';go()")}${tg('Upload on Wi-Fi only',ST.wifi,'ST.wifi=!ST.wifi;go()')}${tg('Grid view by default',ST.mode=='grid',"ST.mode=ST.mode=='grid'?'list':'grid';go()")}
+ <div class="sec">More</div><button class="row" onclick="ST.v='trash';go()">🗑️ <span class="in nm">Trash</span> ›</button><button class="row" onclick="ST.v='storage';go()">💾 <span class="in nm">Storage</span> ›</button><button class="row" onclick="ST.tab='files';ST.ft='all';ST.v='main';go();toast('Offline: '+Object.keys(ST.off).length+' files saved')">📶 <span class="in nm">Offline files</span> ›</button><button class="row" onclick="ST.v='login';ST.onb=0;go()">🚪 <span class="in nm">Sign out</span></button>`},
+viewer(){const i=get(ST.sel);const c=TY[i.t][1];let body='';
+ if(i.t=='img')body=`<div class="view" style="background:linear-gradient(160deg,#fbc2eb,#a6c1ee)">🏞️</div>`;
+ else if(i.t=='video')body=`<div class="view" style="background:#111"><div class="play">▶</div></div>`;
+ else if(i.t=='audio')body=`<div class="view" style="background:linear-gradient(160deg,#14B8A6,#4F46E5)"><div class="wave">${Array.from({length:22},(_, k)=>`<i style="height:${20+Math.abs(Math.sin(k))*60}px"></i>`).join('')}</div></div>`;
+ else body=`<div class="view" style="background:${c};display:block;padding:30px;font-size:16px"><b style="color:#fff;font-size:20px">${i.n}</b><div class="lines"><i></i><i style="width:85%"></i><i></i><i style="width:60%"></i><i></i><i style="width:75%"></i></div></div>`;
+ return `<div class="top"><button class="ib" onclick="ST.v='main';go()">←</button><h1 style="font-size:17px" class="nm">${i.n}</h1><button class="ib" onclick="act(${i.id})">⋮</button></div>${body}
+ <div class="mt" style="text-align:center;margin-bottom:14px">${meta(i)}</div><div style="display:flex;gap:10px"><button class="btn g" onclick="dl(${i.id})">⬇ Download</button><button class="btn g" onclick="sheet('share',${i.id})">👥 Share</button></div>`}};
+function go(keep){const v=ST.v;$('#layer').innerHTML='';
+ $('#screen').innerHTML=v=='main'?V[ST.tab]():V[v]();
+ const m=v=='main';$('#nav').innerHTML=m?`<div class="tabs">${[['home','🏠','Home'],['files','📂','Files'],['shared','👥','Shared'],['starred','⭐','Starred']].map(t=>`<button class="tab ${ST.tab==t[0]?'on':''}" onclick="ST.tab='${t[0]}';ST.cwd=0;ST.ft='all';go()"><span>${t[1]}</span>${t[2]}</button>`).join('')}</div>${ST.tab=='files'||ST.tab=='home'?`<button class="fab" onclick="sheet('create')">+</button>`:''}`:'';
+ if(keep&&v=='search'){const e=$('#qi');if(e){e.focus();e.setSelectionRange(99,99)}}}
+function sr(){const q=ST.q.toLowerCase();$('#res').innerHTML=q?wrap(list(i=>i.n.toLowerCase().includes(q))):''}
+function op(id){const i=get(id);if(i.t=='folder'){ST.cwd=id;ST.tab='files';ST.v='main';ST.ft='all';go()}else{ST.sel=id;ST.v='viewer';go()}}
+function sheet(k,id){let h='';const i=id&&get(id);
+ if(k=='create')h=`<h3>Create new</h3>${[['📁','New folder',"sheet('folder')"],['⬆️','Upload file',"upl()"],['📷','Take photo',"upl('Photo.jpg','img')"],['📑','Scan document',"upl('Scan.pdf','pdf')"]].map(a=>`<button class="act" onclick="${a[2]}"><span>${a[0]}</span>${a[1]}</button>`).join('')}`;
+ if(k=='folder')h=`<h3>New folder</h3><input class="fld" id="fn" placeholder="Folder name" autofocus><button class="btn" onclick="mk()">Create</button>`;
+ if(k=='sort')h=`<h3>Sort by</h3><div class="chips" style="flex-wrap:wrap">${[['d','Modified'],['n','Name'],['s','Size'],['t','Type']].map(a=>`<button class="chip ${ST.sk==a[0]?'on':''}" onclick="ST.sk='${a[0]}';sheet('sort')">${a[1]}</button>`).join('')}<button class="chip" onclick="ST.dir*=-1;sheet('sort')">${ST.dir>0?'↓ Descending':'↑ Ascending'}</button></div><h3 style="margin-top:16px">Filter by type</h3><div class="chips" style="flex-wrap:wrap">${['all',...Object.keys(NAMES)].map(t=>`<button class="chip ${ST.ft==t?'on':''}" onclick="ST.ft='${t}';sheet('sort')">${t=='all'?'All':NAMES[t]}</button>`).join('')}</div><button class="btn" onclick="go()">Apply</button>`;
+ if(k=='act')h=`<div class="row" style="box-shadow:none;padding:0">${th(i)}<div class="in nm">${i.n}</div></div>${[['👥','Share',`sheet('share',${id})`],['⬇️','Download',`dl(${id})`],[i.star?'⭐':'☆',i.star?'Remove star':'Add star',`i_(${id},'star')`],['📶',ST.off[id]?'Remove offline':'Make available offline',`off(${id})`],['✏️','Rename',`sheet('ren',${id})`],['📂','Move to…',`sheet('mv',${id})`],['ℹ️','Details',`sheet('det',${id})`],['🗑️','Move to trash',`i_(${id},'tr')`]].map(a=>`<button class="act" onclick="${a[2]}"><span>${a[0]}</span>${a[1]}</button>`).join('')}`;
+ if(k=='ren')h=`<h3>Rename</h3><input class="fld" id="rn" value="${i.n}"><button class="btn" onclick="get(${id}).n=$('#rn').value||get(${id}).n;go()">Save</button>`;
+ if(k=='mv')h=`<h3>Move to</h3><button class="act" onclick="mv(${id},0)"><span>🏠</span>My Files</button>${items.filter(f=>f.t=='folder'&&f.id!=id&&!f.tr).map(f=>`<button class="act" onclick="mv(${id},${f.id})"><span>📁</span>${f.n}</button>`).join('')}`;
+ if(k=='det')h=`<h3>Details</h3>${[['Name',i.n],['Type',NAMES[i.t]],['Size',sz(i.s)||'—'],['Modified',ago(i.d)],['Owner','You'],['Location',i.p?get(i.p).n:'My Files'],['Sharing',i.sh?'Shared':'Private']].map(a=>`<div class="pp"><div class="mt" style="width:90px">${a[0]}</div><div class="nm">${a[1]}</div></div>`).join('')}`;
+ if(k=='share'){i.ppl=i.ppl||[['Riya Sen','Editor'],['Sam Lee','Viewer']];i.ln=i.ln||'Restricted';
+  h=`<h3>Share “${i.n}”</h3><input class="fld" id="em" placeholder="Add people by email"><button class="btn" style="margin-top:8px" onclick="addp(${id})">Invite</button><div class="sec" style="margin-top:14px">People with access</div>
+  <div class="pp"><div class="av">A</div><div style="flex:1"><div class="nm">Alex (you)</div></div><span class="mt">Owner</span></div>${i.ppl.map((p,x)=>`<div class="pp"><div class="av" style="background:#6366F1">${p[0][0]}</div><div style="flex:1"><div class="nm">${p[0]}</div></div><select onchange="rl(${id},${x},this.value)">${['Viewer','Commenter','Editor','Remove'].map(r=>`<option ${r==p[1]?'selected':''}>${r}</option>`).join('')}</select></div>`).join('')}
+  <div class="sec">General access</div><div class="pp"><div style="flex:1"><div class="nm">${i.ln=='Restricted'?'🔒 Restricted':'🌐 Anyone with the link'}</div><div class="mt">${i.ln=='Restricted'?'Only added people can open':'Anyone on the internet can view'}</div></div><button class="chip" onclick="get(${id}).ln=get(${id}).ln=='Restricted'?'Anyone':'Restricted';sheet('share',${id})">Change</button></div>
+  <button class="btn g" onclick="toast('Link copied 🔗')">🔗 Copy link</button>`}
+ $('#layer').innerHTML=`<div class="ov" onclick="if(event.target==this)this.remove()"><div class="sheet"><div class="grab"></div>${h}</div></div>`}
+function act(id){sheet('act',id)}
+function i_(id,k){const i=get(id);i[k]=!i[k];if(k=='tr')toast('Moved to trash');go()}
+function mv(id,p){get(id).p=p;toast('Moved');go()}
+function off(id){ST.off[id]?delete ST.off[id]:ST.off[id]=1;toast(ST.off[id]?'Available offline 📶':'Removed from offline');$('#layer').innerHTML=''}
+function mk(){const n=$('#fn').value.trim();if(!n)return;items.push({id:++uid,p:ST.cwd,n,t:'folder',s:0,d:0});go();toast('Folder created')}
+function addp(id){const e=$('#em').value.trim();if(!e)return;get(id).ppl.push([e,'Viewer']);get(id).sh=1;sheet('share',id)}
+function rl(id,x,v){if(v=='Remove')get(id).ppl.splice(x,1);else get(id).ppl[x][1]=v;get(id).sh=1;sheet('share',id)}
+function dl(id){toast('Downloading '+get(id).n+' …',1);$('#layer').innerHTML=''}
+function upl(n,t){const pool=[['Report.docx','doc',90],['Song.mp3','audio',4100],['Clip.mp4','video',22000],['Scan.jpg','img',1500]];const f=n?[n,t,800]:pool[Math.floor(Math.random()*pool.length)];
+ $('#layer').innerHTML='';toast('Uploading '+f[0],1);setTimeout(()=>{items.push({id:++uid,p:ST.cwd,n:f[0],t:f[1],s:f[2],d:0});go();toast('Uploaded ✓ '+f[0])},1400)}
+function toast(m,p){const o=$('.toast');o&&o.remove();const d=document.createElement('div');d.className='toast';d.innerHTML=m+(p?'<div class="bar"><i style="width:0;transition:width 1.3s linear"></i></div>':'');$('#app').appendChild(d);if(p)setTimeout(()=>d.querySelector('i').style.width='100%',30);setTimeout(()=>d.remove(),p?1500:2200)}
+/* ===== v2 additions ===== */
+uid=100;
+items.push(
+{id:30,p:null,sw:1,own:'Riya Sen',role:'Editor',n:'Team plan.docx',t:'doc',s:80,d:0},
+{id:31,p:null,sw:1,own:'Sam Lee',role:'Viewer',n:'Brand kit.png',t:'img',s:2600,d:1},
+{id:32,p:null,sw:1,own:'Maya Rao',role:'Commenter',n:'Q4 Report.pdf',t:'pdf',s:2400,d:3},
+{id:33,p:null,sw:1,own:'Riya Sen',role:'Editor',n:'Sales sheet.xlsx',t:'sheet',s:340,d:5},
+{id:34,p:null,sw:1,own:'Maya Rao',role:'Viewer',n:'Launch demo.mp4',t:'video',s:46000,d:9},
+{id:35,p:null,sw:1,own:'Sam Lee',role:'Viewer',n:'Interview.mp3',t:'audio',s:7800,d:12},
+{id:36,p:null,sw:1,own:'Sam Lee',role:'Viewer',n:'Assets.zip',t:'zip',s:15000,d:15});
+ST.sh='me';ST.own='All';
+const S=ST.set={wifi:1,backup:0,q:'Original',auto:1,keep:0,nsh:1,nup:1,nlow:1,lock:0,shot:0,view:'Grid',sort:'Modified',thm:'System',lang:'English'};
+const ov=h=>$('#layer').innerHTML=`<div class="ov" onclick="if(event.target==this)this.remove()"><div class="sheet"><div class="grab"></div>${h}</div></div>`;
+
+/* ---- Shared with me ---- */
+function srow(i){return `<div class="row" onclick="op(${i.id})">${th(i)}<div class="in"><div class="nm">${i.n}</div><div class="mt">${i.own} · ${sz(i.s)} · ${ago(i.d)}</div></div>${i.d==0?'<span class="nd"></span>':''}<span class="rb">${i.role}</span><button class="dots" onclick="event.stopPropagation();act(${i.id})">⋮</button></div>`}
+V.shared=function(){const me=ST.sh!='by';
+ const seg=`<div class="seg"><button class="${me?'on':''}" onclick="ST.sh='me';go()">Shared with me</button><button class="${me?'':'on'}" onclick="ST.sh='by';go()">Shared by me</button></div>`;
+ if(!me)return topbar('Shared')+seg+ctrl()+wrap(list(i=>i.sh&&!i.sw));
+ const owners=['All',...new Set(items.filter(i=>i.sw&&!i.tr).map(i=>i.own))];
+ const a=list(i=>i.sw&&(ST.own=='All'||i.own==ST.own));
+ const G=[['Today',x=>x.d==0],['This week',x=>x.d>0&&x.d<=7],['Earlier',x=>x.d>7]];
+ return topbar('Shared')+seg+`<div class="chips" style="margin-bottom:10px">${owners.map(o=>`<button class="chip ${ST.own==o?'on':''}" onclick="ST.own='${o}';go()">${o=='All'?'Everyone':o}</button>`).join('')}</div>
+ <button class="chip" style="width:100%;margin-bottom:6px" onclick="sheet('sort')">⇅ Sort &amp; filter${ST.ft!='all'?' •':''}</button>`+
+ (a.length?G.map(g=>{const r=a.filter(g[1]);return r.length?`<div class="lab">${g[0].toUpperCase()}</div>`+r.map(srow).join(''):''}).join(''):`<div class="empty"><div style="font-size:48px">🤝</div>Nothing shared with you yet</div>`)};
+const _sheet=sheet;
+sheet=function(k,id){const i=id&&get(id);
+ if(i&&i.sw){
+  if(k=='act')return ov(`<div class="row" style="box-shadow:none;padding:0">${th(i)}<div class="in"><div class="nm">${i.n}</div><div class="mt">${i.own} · ${i.role}</div></div></div>`+[['👁️','Open',`op(${id})`],['⬇️','Download',`dl(${id})`],[i.star?'⭐':'☆',i.star?'Remove star':'Add star',`i_(${id},'star')`],['📶',ST.off[id]?'Remove offline':'Make available offline',`off(${id})`],['➕','Add a copy to My Files',`cp(${id})`],['ℹ️','Details',`sheet('det',${id})`],['🚫','Remove from shared with me',`i_(${id},'tr')`]].map(a=>`<button class="act" onclick="${a[2]}"><span>${a[0]}</span>${a[1]}</button>`).join(''));
+  if(k=='det')return ov(`<h3>Details</h3>`+[['Name',i.n],['Type',NAMES[i.t]],['Size',sz(i.s)],['Shared by',i.own],['Your access',i.role],['Modified',ago(i.d)]].map(a=>`<div class="pp"><div class="mt" style="width:100px">${a[0]}</div><div class="nm">${a[1]}</div></div>`).join(''));
+  if(k=='share')return ov(`<h3>Share “${i.n}”</h3><div class="pp"><div class="av" style="background:#6366F1">${i.own[0]}</div><div style="flex:1"><div class="nm">${i.own}</div><div class="mt">Owner</div></div></div><div class="pp"><div class="av">A</div><div style="flex:1"><div class="nm">You</div></div><span class="rb">${i.role}</span></div><p class="mt" style="margin:10px 0">${i.role=='Editor'?'Editors can invite people.':'Only the owner and editors can change who has access.'}</p><button class="btn g" onclick="toast('Link copied 🔗')">🔗 Copy link</button>`);
+ }
+ _sheet(k,id)};
+function cp(id){const i=get(id);items.push({id:++uid,p:0,n:i.n,t:i.t,s:i.s,d:0});$('#layer').innerHTML='';toast('Copy added to My Files')}
+
+/* ---- Viewer ---- */
+const VW={id:0};
+const LP=['Cloud storage keeps your files safe and available on every device.','Share a file with a link or invite people by email and choose what they can do.','Folders can be nested as deep as you like to keep projects organised.','Search by name, type or date to find anything in seconds.','Offline files stay on your phone so you can read them without internet.','Permissions let you decide who can view, comment or edit each file.'];
+const pgtxt=p=>[0,1,2].map(k=>LP[(p+k)%6]+' '+LP[(p*2+k+1)%6]);
+const fmt=s=>Math.floor(s/60)+':'+String(Math.floor(s%60)).padStart(2,'0');
+const dur=()=>get(ST.sel).t=='video'?184:242;
+function vr(){if(VW.id==ST.sel)return;clearInterval(VW.iv);Object.assign(VW,{id:ST.sel,z:1,r:0,pg:1,play:false,t:0,sp:1,mute:false,loop:false,q:'',sh:0,th:'light',c:null,tab:0,cc:0,bm:{}});
+ const t=get(ST.sel).t;if(S.auto&&(t=='video'||t=='audio'))setTimeout(()=>{if(ST.v=='viewer'&&!VW.play)ptog()},60)}
+function vs(k,v){VW[k]=v;go()}
+function fq(v){VW.q=v;go();const e=$('#fq');if(e){e.focus();e.setSelectionRange(99,99)}}
+function up(){const k=$('#sk'),m=$('#tm');if(k)k.value=VW.t;if(m)m.textContent=fmt(VW.t)+' / '+fmt(dur());document.querySelectorAll('.wv i').forEach((e,x)=>e.style.opacity=x/28<VW.t/dur()?1:.35)}
+function ptog(){VW.play=!VW.play;clearInterval(VW.iv);if(VW.play){if(VW.t>=dur())VW.t=0;VW.iv=setInterval(()=>{VW.t=Math.min(dur(),VW.t+VW.sp);if(VW.t>=dur()){if(VW.loop)VW.t=0;else{VW.play=false;clearInterval(VW.iv);go();return}}up()},1000)}go()}
+function ext(id){const i=get(id);items.push({id:++uid,p:i.p||0,n:i.n.replace('.zip','')+' (extracted)',t:'folder',s:0,d:0});toast('Extracted to My Files')}
+V.viewer=function(){const i=get(ST.sel);vr();const t=i.t,Z=VW.z;
+ const B=(ic,l,f,on)=>`<button class="tb${on?' on':''}" onclick="${f}"><span>${ic}</span>${l}</button>`;
+ let body='',tools='';
+ if(t=='img'){
+  body=`<div class="view" style="background:#0c0e1f;height:340px"><div style="width:220px;height:220px;border-radius:18px;background:linear-gradient(160deg,#fbc2eb,#a6c1ee,#8ec5fc);display:grid;place-items:center;font-size:90px;transition:.25s;transform:scale(${Z}) rotate(${VW.r}deg)">🏞️</div><span class="rb" style="position:absolute;top:12px;right:12px;background:#0008;color:#fff">${Math.round(Z*100)}%</span></div>`;
+  tools=B('➕','Zoom in',`vs('z',Math.min(3,VW.z+.25))`)+B('➖','Zoom out',`vs('z',Math.max(.5,VW.z-.25))`)+B('⟳','Rotate',`vs('r',VW.r+90)`)+B('⤢','Fit',`VW.z=1;vs('r',0)`)}
+ else if(t=='pdf'||t=='doc'){
+  const C={light:['#fff','#222'],sepia:['#f4ecd8','#5b4636'],dark:['#1b1b1b','#ddd']}[VW.th],q=VW.q.trim();
+  const re=q&&new RegExp(q.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'),'gi');
+  const n=re?([1,2,3,4,5,6].map(p=>pgtxt(p).join(' ')).join(' ').match(re)||[]).length:0;
+  const h=pgtxt(VW.pg).map(s=>`<p>${re?s.replace(re,m=>`<mark>${m}</mark>`):s}</p>`).join('');
+  body=(VW.sh?`<div class="search" style="margin-bottom:10px">🔍<input id="fq" value="${VW.q}" placeholder="Find in document" oninput="fq(this.value)"><span class="mt">${n} found</span></div>`:'')+
+  `<div class="paper" style="background:${C[0]};color:${C[1]};font-size:${14*Z}px"><div style="font-size:1.3em;font-weight:700">${i.n}</div><div style="opacity:.6;font-size:.8em">Page ${VW.pg} of 6${VW.bm[VW.pg]?' · 🔖 bookmarked':''}</div>${h}</div>
+  <div class="pn"><button class="ib" onclick="vs('pg',Math.max(1,VW.pg-1))">‹</button><input type="range" min="1" max="6" value="${VW.pg}" onchange="vs('pg',+this.value)" style="flex:1"><button class="ib" onclick="vs('pg',Math.min(6,VW.pg+1))">›</button></div>`;
+  tools=B('🔍','Find',`vs('sh',!VW.sh)`,VW.sh)+B('➕','Zoom in',`vs('z',Math.min(1.8,VW.z+.2))`)+B('➖','Zoom out',`vs('z',Math.max(.8,VW.z-.2))`)+B('🎨','Theme: '+VW.th,`vs('th',{light:'sepia',sepia:'dark',dark:'light'}[VW.th])`)+B('🔖','Bookmark',`VW.bm[VW.pg]=!VW.bm[VW.pg];go()`,VW.bm[VW.pg])+B('🖨️','Print',`toast('Sending to printer…')`)}
+ else if(t=='sheet'){
+  const R=[['Laptop',2,640],['Phone',5,310],['Tablet',3,280],['Monitor',4,190],['Keyboard',10,35],['Mouse',12,18],['Cable',30,6],['Dock',2,120]];
+  const M=[['Item','Qty','Price','Total','Status'],...R.map(r=>[r[0],r[1],r[2],r[1]*r[2],r[1]*r[2]>1000?'Due':'Paid'])];
+  const tot=M.slice(1).reduce((a,r)=>a+r[3],0),c=VW.c||[1,0];
+  if(VW.tab==0){const f=c[0]>0&&c[1]==3?'=B'+(c[0]+1)+'*C'+(c[0]+1):M[c[0]][c[1]];
+   body=`<div class="search" style="margin-bottom:10px;gap:10px"><b style="color:var(--pr)">fx</b><span style="color:var(--tx)">${f}</span></div><div style="overflow-x:auto;border-radius:12px;background:var(--card);margin-bottom:12px"><table class="tbl"><tr><th></th>${'ABCDE'.split('').map(x=>`<th>${x}</th>`).join('')}</tr>${M.map((r,y)=>`<tr><th>${y+1}</th>${r.map((v,x)=>`<td class="${c[0]==y&&c[1]==x?'sel':''}" style="${y==0?'font-weight:700':''}" onclick="VW.c=[${y},${x}];go()">${x==3&&y>0?'$'+v:v}</td>`).join('')}</tr>`).join('')}</table></div>`}
+  else body=`<div class="grid">${[['Total value','$'+tot],['Items',R.length],['Largest','Laptop'],['Due',M.filter(r=>r[4]=='Due').length+' orders']].map(a=>`<div class="card"><div class="mt">${a[0]}</div><div style="font-size:22px;font-weight:700;margin-top:4px">${a[1]}</div></div>`).join('')}</div><div style="height:12px"></div>`;
+  tools=B('▦','Sheet1',`vs('tab',0)`,VW.tab==0)+B('Σ','Summary',`vs('tab',1)`,VW.tab==1)+B('⬇','Export CSV',`toast('Exported as CSV')`)}
+ else if(t=='video'||t=='audio'){const v=t=='video';
+  body=(v?`<div class="view" style="background:linear-gradient(160deg,#1e1b4b,#7c3aed);height:230px"><div style="font-size:64px;opacity:${VW.play?.35:1}">🎬</div>${VW.cc&&VW.play?'<div class="cap">Welcome to the CloudBox demo</div>':''}<button class="play" style="position:absolute" onclick="ptog()">${VW.play?'❚❚':'▶'}</button></div>`
+  :`<div class="view" style="background:linear-gradient(160deg,#14B8A6,#4F46E5);height:230px"><div class="wv wave">${Array.from({length:28},(_,k)=>`<i style="height:${16+Math.abs(Math.sin(k*1.7))*64}px;opacity:${k/28<VW.t/dur()?1:.35}"></i>`).join('')}</div></div>`)+
+  `<div class="ctl"><input id="sk" type="range" min="0" max="${dur()}" value="${VW.t}" oninput="VW.t=+this.value;up()" style="width:100%"><div class="mt" style="display:flex;justify-content:space-between"><span id="tm">${fmt(VW.t)} / ${fmt(dur())}</span><span>${VW.sp}x${VW.mute?' · muted':''}</span></div></div>`;
+  tools=B('⏪','−10s',`VW.t=Math.max(0,VW.t-10);go()`)+B(VW.play?'⏸':'▶',VW.play?'Pause':'Play','ptog()',1)+B('⏩','+10s',`VW.t=Math.min(dur(),VW.t+10);go()`)+B('⚡','Speed '+VW.sp+'x',`vs('sp',{1:1.5,1.5:2,2:.5,.5:1}[VW.sp])`)+B('🔁','Loop',`vs('loop',!VW.loop)`,VW.loop)+B(VW.mute?'🔇':'🔊','Mute',`vs('mute',!VW.mute)`,VW.mute)+(v?B('💬','Captions',`vs('cc',!VW.cc)`,VW.cc)+B('⛶','Fullscreen',`toast('Fullscreen is not available in preview')`):'')}
+ else{const E=[['docs/',0],['photos/',0],['readme.txt',2],['report.pdf',840],['logo.png',120]];
+  body=`<div class="paper" style="background:var(--card);min-height:0"><b>${i.n}</b><div class="mt">${E.length} items · ${sz(i.s)}</div>${E.map(e=>`<div class="pp"><span style="font-size:22px">${e[0].endsWith('/')?'📁':'📄'}</span><div class="nm" style="flex:1">${e[0]}</div><span class="mt">${sz(e[1])}</span></div>`).join('')}</div>`;
+  tools=B('📦','Extract all',`ext(${i.id})`)}
+ return `<div class="top"><button class="ib" onclick="ST.v='main';go()">←</button><div style="flex:1;min-width:0"><div class="nm" style="font-size:16px;font-weight:700">${i.n}</div><div class="mt">${NAMES[t]} · ${i.sw?i.own+' · '+i.role:meta(i)}</div></div><button class="ib" onclick="act(${i.id})">⋮</button></div>${body}<div class="lab" style="margin-top:4px">TOOLS</div><div class="tbar">${tools}</div><div class="lab" style="margin-top:6px">ACTIONS</div><div class="tbar">${B('⬇','Download',`dl(${i.id})`)+B('👥','Share',`sheet('share',${i.id})`)+B(i.star?'⭐':'☆','Star',`i_(${i.id},'star')`,i.star)+B('📶','Offline',`off(${i.id})`,ST.off[i.id])+B('ℹ️','Details',`sheet('det',${i.id})`)}</div>`};
+const _go=go;
+go=function(k){if(ST.v!='viewer'){clearInterval(VW.iv);VW.play=false;VW.id=0}_go(k)};
+
+/* ---- Settings ---- */
+function sv(k,v){S[k]=v;if(k=='thm'){const d=document.documentElement;v=='System'?d.removeAttribute('data-theme'):d.dataset.theme=v.toLowerCase()}
+ if(k=='view')ST.mode=v.toLowerCase();if(k=='sort')ST.sk={Modified:'d',Name:'n',Size:'s',Type:'t'}[v];go()}
+V.settings=function(){
+ const R=(l,s,r,f)=>`<div class="row"${f?` onclick="${f}"`:''}><div class="in"><div class="nm">${l}</div>${s?`<div class="mt">${s}</div>`:''}</div>${r}</div>`;
+ const T=(l,s,k)=>R(l,s,`<div class="tg ${S[k]?'on':''}"><i></i></div>`,`sv('${k}',${S[k]?0:1})`);
+ const O=(l,k,a)=>R(l,'',`<select onchange="sv('${k}',this.value)">${a.map(x=>`<option${x==S[k]?' selected':''}>${x}</option>`).join('')}</select>`);
+ const L=(l,s,f)=>R(l,s,'<span style="color:var(--mu)">›</span>',f);
+ const used=Math.round(items.reduce((a,i)=>a+(i.sw?0:i.s),0)/1024);
+ return `<div class="top"><button class="ib" onclick="ST.v='main';go()">←</button><h1>Settings</h1></div>
+ <div class="hero" style="display:flex;gap:14px;align-items:center"><div class="av" style="width:56px;height:56px;font-size:22px;background:#fff3;flex:none">A</div><div style="flex:1;min-width:0"><div style="font-weight:700;font-size:17px">Alex Kumar</div><div style="font-size:12px;opacity:.85">alex@gmail.com</div><div class="bar"><i style="width:${Math.max(4,used/150)}%"></i></div><div style="font-size:12px;opacity:.85">${used} MB of 15 GB used</div></div></div>
+ <div class="lab">ACCOUNT</div>${R('Google Drive','Connected · files sync to Drive','<span class="rb">✓ Linked</span>')}${L('Switch account','',"toast('Opening Google account picker…')")}${L('Storage','Usage by file type',"ST.v='storage';go()")}
+ <div class="lab">APPEARANCE</div>${O('Theme','thm',['System','Light','Dark'])}${O('Default view','view',['Grid','List'])}${O('Default sort','sort',['Modified','Name','Size','Type'])}${O('Language','lang',['English','हिन्दी','తెలుగు'])}
+ <div class="lab">UPLOADS &amp; DOWNLOADS</div>${T('Upload on Wi-Fi only','Save mobile data','wifi')}${T('Auto-backup photos','Upload new photos to a Backup folder','backup')}${O('Upload quality','q',['Original','High','Data saver'])}
+ <div class="lab">FILE VIEWER</div>${T('Autoplay audio and video','Start playing when opened','auto')}${T('Keep screen on','While viewing documents','keep')}
+ <div class="lab">NOTIFICATIONS</div>${T('Someone shares with me','','nsh')}${T('Upload finished','','nup')}${T('Storage almost full','','nlow')}
+ <div class="lab">SECURITY &amp; PRIVACY</div>${T('App lock','Ask for fingerprint or PIN','lock')}${T('Block screenshots','','shot')}${L('Manage sharing links','Review who has access',"ST.v='main';ST.tab='shared';ST.sh='by';go()")}
+ <div class="lab">OFFLINE &amp; CACHE</div>${L('Offline files',Object.keys(ST.off).length+' saved',"ST.v='main';ST.tab='files';go();toast('Offline files: '+Object.keys(ST.off).length)")}${L('Clear cache','48 MB',"toast('Cache cleared')")}${L('Trash','Deleted after 30 days',"ST.v='trash';go()")}
+ <div class="lab">ABOUT</div>${L('Help &amp; feedback','',"toast('Opening help centre…')")}${L('Privacy policy','',"toast('Opening privacy policy…')")}${R('Version','','<span class="mt">1.1.0</span>')}
+ <button class="btn g" style="margin-top:16px;color:#EF4444" onclick="ST.v='login';ST.onb=0;go()">Sign out</button>`};
+
+go();
+</script></body></html>

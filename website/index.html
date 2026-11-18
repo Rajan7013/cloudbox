@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CloudBox — Your Fast, Private File Manager for Google Drive</title>
+  <meta name="description" content="CloudBox is a native Android file manager built with Material 3 that connects directly to your Google Drive. Zero ads, zero tracking, 100% your own storage.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+
+  <!-- ===== Navbar ===== -->
+  <nav class="navbar" role="navigation" aria-label="Main navigation">
+    <div class="container">
+      <a href="./index.html" class="navbar-brand">
+        <img src="./assets/cloudbox_icon.jpg" alt="CloudBox Logo" class="brand-logo-img">
+        <span>CloudBox</span>
+      </a>
+      <button class="nav-toggle" aria-label="Toggle menu" onclick="document.querySelector('.nav-links').classList.toggle('open')">
+        <span></span><span></span><span></span>
+      </button>
+      <ul class="nav-links">
+        <li><a href="./index.html" class="active">Home</a></li>
+        <li><a href="./privacy.html">Privacy Policy</a></li>
+        <li><a href="./terms.html">Terms &amp; Conditions</a></li>
+      </ul>
+    </div>
+  </nav>
+
+  <!-- ===== Hero ===== -->
+  <header class="hero">
+    <div class="container">
+      <!-- App Icon Visual Anchor -->
+      <div class="hero-icon-wrapper">
+        <img src="./assets/cloudbox_icon.jpg" alt="CloudBox App Icon" class="hero-app-icon">
+      </div>
+
+      <!-- Release / Category Badge -->
+      <div class="hero-pill">
+        <span class="pill-dot"></span>
+        <span>Native Android File Manager · v1.0 Available</span>
+      </div>
+
+      <!-- Main App Title & Narrative -->
+      <h1 class="hero-title">CloudBox</h1>
+      <p class="hero-tagline">Fast, Private &amp; Material 3 File Manager for Google Drive</p>
+      <p class="hero-description">Browse, upload, scan documents to PDF, stream media, and pin files offline directly inside your own Google Drive — with zero developer servers, zero ads, and zero tracking.</p>
+
+      <!-- Action Buttons -->
+      <div class="hero-cta-group">
+        <a href="./downloads/CloudBox-v1.0.apk" class="btn btn-hero-download" download="CloudBox-v1.0.apk">
+          <span class="btn-icon">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+          </span>
+          <span class="btn-copy">
+            <span class="btn-main">Download CloudBox APK</span>
+            <span class="btn-sub">v1.0 · Android 7.0+ (API 24+) · 26.7 MB</span>
+          </span>
+        </a>
+        <a href="#features" class="btn btn-hero-secondary">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 6px;"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></svg>
+          Explore Features
+        </a>
+      </div>
+
+      <!-- Installation Hint -->
+      <p class="hero-install-notice">
+        <span>💡 Android Note:</span> Tap "Download CloudBox APK" and enable <em>"Allow Install unknown apps"</em> if prompted by your browser.
+      </p>
+
+      <!-- Trust Badges -->
+      <div class="hero-highlights">
+        <div class="highlight-chip">
+          <span>🛡️ 100% Direct Google Drive</span>
+        </div>
+        <div class="highlight-chip">
+          <span>🚫 Zero Developer Storage Servers</span>
+        </div>
+        <div class="highlight-chip">
+          <span>🔒 Zero Ads &amp; Zero Tracking</span>
+        </div>
+        <div class="highlight-chip">
+          <span>📄 Built-in PDF Scanner &amp; Viewers</span>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- ===== About Section ===== -->
+  <section id="about">
+    <div class="container">
+      <div class="section-header">
+        <span class="section-label">About CloudBox</span>
+        <h2>Why CloudBox?</h2>
+        <p>A native Android workspace that puts your Google Drive front and center — with zero middlemen.</p>
+      </div>
+      <div class="about-grid">
+        <!-- Core Idea -->
+        <div class="about-card">
+          <div class="card-icon">💡</div>
+          <h3>Core Idea</h3>
+          <p>Turn Google Drive into a fast, clutter-free native Android workspace where every file stays inside the user's own Google Drive account — using least-privilege access (<code>drive.file</code>) with zero intermediary developer servers.</p>
+        </div>
+        <!-- Aim -->
+        <div class="about-card">
+          <div class="card-icon">🎯</div>
+          <h3>Aim</h3>
+          <p>Give Android users a lightweight, responsive, privacy-first cloud file manager with built-in multi-format viewers and document scanning.</p>
+        </div>
+        <!-- Goal -->
+        <div class="about-card">
+          <div class="card-icon">🚀</div>
+          <h3>Goal</h3>
+          <p>Simplify everyday cloud workflows — uploading, scanning paperwork to PDF, organizing nested folders, collaborating with permissions, and reading offline — across phones, foldables, and tablets.</p>
+        </div>
+        <!-- Vision -->
+        <div class="about-card">
+          <div class="card-icon">🔭</div>
+          <h3>Vision</h3>
+          <p>Personal cloud management where users retain 100% ownership of their files, storage quota, and privacy while enjoying effortless native speed.</p>
+        </div>
+        <!-- Mission -->
+        <div class="about-card">
+          <div class="card-icon">🛡️</div>
+          <h3>Mission</h3>
+          <p>Deliver a transparent, zero-ad, zero-tracking Google Drive client that requests only the minimum permissions needed and never stores user files on third-party servers.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== How It Works / FAQ ===== -->
+  <section id="how-it-works" style="background: var(--surface-variant);">
+    <div class="container">
+      <div class="section-header">
+        <span class="section-label">How It Works</span>
+        <h2>Your Data, Your Drive, Your Rules</h2>
+      </div>
+      <div class="how-it-works">
+        <h3>How does CloudBox work?</h3>
+        <p>Each user signs in with their own Google account. All uploads, folders, and files live strictly in <strong>their own Google Drive</strong> and use <strong>their own Google storage quota</strong>.</p>
+        <p>CloudBox communicates directly with Google Drive APIs on your device. There is no developer server in between — your files never pass through anyone else's infrastructure.</p>
+        <div class="highlight-box">
+          🔒 Neither the app developer nor other users can ever access your files. Your data stays 100% yours.
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== Feature Showcase ===== -->
+  <section id="features">
+    <div class="container">
+      <div class="section-header">
+        <span class="section-label">Features</span>
+        <h2>Everything You Need in One App</h2>
+        <p>A complete cloud file manager — no subscriptions, no ads, no compromise.</p>
+      </div>
+      <div class="features-grid">
+
+        <!-- A. Privacy-First Auth -->
+        <div class="feature-card">
+          <span class="card-label">A · Authentication &amp; Sync</span>
+          <h3>Privacy-First Authentication &amp; Direct Google Drive Sync</h3>
+          <p>Sign in securely and connect straight to your Drive — no middleman.</p>
+          <ul class="feature-list">
+            <li>Passwordless Google Sign-In</li>
+            <li>Least-Privilege <code>drive.file</code> scope</li>
+            <li>Zero Developer Servers — direct API communication</li>
+          </ul>
+        </div>
+
+        <!-- B. Home Dashboard -->
+        <div class="feature-card">
+          <span class="card-label">B · Dashboard &amp; Organization</span>
+          <h3>Smart Home Dashboard &amp; File Organization</h3>
+          <p>An intelligent dashboard to find, sort, and manage every file at a glance.</p>
+          <ul class="feature-list">
+            <li>Live Storage Quota Card</li>
+            <li>Quick Category Filters</li>
+            <li>Recent Files &amp; Pull-to-Refresh</li>
+            <li>Nested Folder Breadcrumbs</li>
+            <li>Grid &amp; List Views + Sort &amp; Filter</li>
+            <li>Multi-Select Batch Actions</li>
+          </ul>
+        </div>
+
+        <!-- C. Uploads & Scanner -->
+        <div class="feature-card">
+          <span class="card-label">C · Uploads &amp; Scanner</span>
+          <h3>Uploads, Folders &amp; Camera-to-PDF Document Scanner</h3>
+          <p>Upload files, create folders, and scan documents to PDF — all without leaving the app.</p>
+          <ul class="feature-list">
+            <li>Create Folders</li>
+            <li>Resumable Multi-File Uploads</li>
+            <li>Wi-Fi-Only Upload Safeguard</li>
+            <li>Zero-Permission Photo &amp; Video Picker</li>
+            <li>Take Photo &amp; Scan Document to PDF</li>
+          </ul>
+        </div>
+
+        <!-- D. File Viewer -->
+        <div class="feature-card">
+          <span class="card-label">D · Built-In Viewers</span>
+          <h3>Built-In All-in-One File Viewer</h3>
+          <p>View any file type natively — images, PDFs, code, spreadsheets, media, and archives.</p>
+          <ul class="feature-list">
+            <li>Image Viewer with pinch-to-zoom</li>
+            <li>PDF Reader with bookmarks, themes &amp; print</li>
+            <li>Text &amp; Code Viewer with search</li>
+            <li>CSV / Spreadsheet Viewer</li>
+            <li>Video &amp; Audio Player with ExoPlayer</li>
+            <li>ZIP Archive Inspector</li>
+          </ul>
+        </div>
+
+        <!-- E. Sharing & More -->
+        <div class="feature-card">
+          <span class="card-label">E · Sharing &amp; More</span>
+          <h3>Sharing, Search, Offline Mode &amp; Storage Management</h3>
+          <p>Collaborate, search, work offline, and manage your cloud storage effortlessly.</p>
+          <ul class="feature-list">
+            <li>Shared Tab</li>
+            <li>Share &amp; Permissions Sheet</li>
+            <li>Starred &amp; Instant Search</li>
+            <li>Offline Files</li>
+            <li>Trash Recovery</li>
+            <li>Storage Breakdown</li>
+            <li>Themes &amp; Adaptive Design</li>
+          </ul>
+        </div>
+
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== Trust Banner ===== -->
+  <section style="padding: 2rem 0 4rem;">
+    <div class="trust-banner">
+      <h2>🔒 100% Your Own Google Drive</h2>
+      <p>Zero developer storage servers · Zero ads · Zero tracking</p>
+    </div>
+  </section>
+
+  <!-- ===== Footer ===== -->
+  <footer class="footer">
+    <div class="container">
+      <div class="footer-inner">
+        <span class="footer-brand">CloudBox</span>
+        <ul class="footer-links">
+          <li><a href="./index.html">Home</a></li>
+          <li><a href="./privacy.html">Privacy Policy</a></li>
+          <li><a href="./terms.html">Terms &amp; Conditions</a></li>
+        </ul>
+        <span class="footer-contact">Support: <a href="mailto:rajanprasaila@gmail.com">rajanprasaila@gmail.com</a></span>
+      </div>
+    </div>
+  </footer>
+
+</body>
+</html>

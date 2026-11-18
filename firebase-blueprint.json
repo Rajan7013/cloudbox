@@ -1,0 +1,162 @@
+{
+  "entities": {
+    "SavedPlant": {
+      "title": "SavedPlant",
+      "description": "A plant identified by Gemini from a user photo along with its tailored care guide and watering schedule.",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "description": "Authenticated owner UID."
+        },
+        "commonName": {
+          "type": "string",
+          "description": "Common name of the plant."
+        },
+        "scientificName": {
+          "type": "string",
+          "description": "Botanical scientific name."
+        },
+        "nickname": {
+          "type": "string",
+          "description": "Optional user-assigned nickname."
+        },
+        "confidence": {
+          "type": "string",
+          "description": "Identification confidence level (High, Medium, Low)."
+        },
+        "healthStatus": {
+          "type": "string",
+          "description": "Visual health assessment from the photo (Healthy, Needs Attention, Stressed)."
+        },
+        "healthNotes": {
+          "type": "string",
+          "description": "Detailed observations about leaf health, pests, or stress."
+        },
+        "summary": {
+          "type": "string",
+          "description": "Short botanical overview of the plant."
+        },
+        "wateringFrequencyDays": {
+          "type": "integer",
+          "description": "Recommended watering interval in days (1-90)."
+        },
+        "wateringDetails": {
+          "type": "string",
+          "description": "Detailed watering guidance including soil moisture checks."
+        },
+        "sunlightLevel": {
+          "type": "string",
+          "description": "Primary light requirement."
+        },
+        "sunlightDetails": {
+          "type": "string",
+          "description": "Detailed light placement instructions."
+        },
+        "soilType": {
+          "type": "string",
+          "description": "Recommended soil mix and drainage."
+        },
+        "humidityTemp": {
+          "type": "string",
+          "description": "Ideal humidity and temperature range."
+        },
+        "fertilizerSchedule": {
+          "type": "string",
+          "description": "Feeding frequency and fertilizer type."
+        },
+        "pruningPropagation": {
+          "type": "string",
+          "description": "Pruning and propagation instructions."
+        },
+        "petToxicity": {
+          "type": "string",
+          "description": "Safety notes for cats, dogs, and children."
+        },
+        "commonProblems": {
+          "type": "string",
+          "description": "Bounded list of common issues and fixes."
+        },
+        "careTips": {
+          "type": "string",
+          "description": "Bounded list of actionable pro care tips."
+        },
+        "lastWateredAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp of the last recorded watering."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when saved (FieldValue.serverTimestamp())."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when last updated (FieldValue.serverTimestamp())."
+        }
+      },
+      "required": [
+        "userId",
+        "commonName",
+        "scientificName",
+        "confidence",
+        "healthStatus",
+        "wateringFrequencyDays",
+        "sunlightLevel",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "ChatMessage": {
+      "title": "ChatMessage",
+      "description": "A single message in the user's multi-turn AI botanist chat thread.",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "description": "Authenticated owner UID."
+        },
+        "role": {
+          "type": "string",
+          "enum": ["user", "model"],
+          "description": "Sender role in conversation."
+        },
+        "text": {
+          "type": "string",
+          "description": "Message body."
+        },
+        "plantContext": {
+          "type": "string",
+          "description": "Optional plant name context attached to the question."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp (FieldValue.serverTimestamp())."
+        }
+      },
+      "required": [
+        "userId",
+        "role",
+        "text",
+        "createdAt"
+      ]
+    }
+  },
+  "firestore": {
+    "/users/{userId}/plants/{plantId}": {
+      "schema": {
+        "$ref": "#/entities/SavedPlant"
+      },
+      "description": "User's saved plants and care schedules."
+    },
+    "/users/{userId}/chatMessages/{messageId}": {
+      "schema": {
+        "$ref": "#/entities/ChatMessage"
+      },
+      "description": "User's persistent botanist assistant chat history."
+    }
+  }
+}

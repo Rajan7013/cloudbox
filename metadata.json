@@ -1,0 +1,6 @@
+{
+  "name": "CloudBox",
+  "description": "CloudBox File Manager backed by Google Drive: upload, browse nested folders, preview PDFs/docs/spreadsheets/media/archives, share permissions, and save files offline.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

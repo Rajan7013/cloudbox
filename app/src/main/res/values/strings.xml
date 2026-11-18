@@ -1,0 +1,73 @@
+<resources>
+    <string name="app_name">CloudBox</string>
+    <string name="tagline">Your files, everywhere</string>
+
+    <!-- Onboarding -->
+    <string name="skip">Skip</string>
+    <string name="next">Next</string>
+    <string name="get_started">Get started</string>
+    <string name="onboarding_1_title">Store everything</string>
+    <string name="onboarding_1_body">Documents, photos, video and audio safely organized in your Google Drive.</string>
+    <string name="onboarding_2_title">Share with control</string>
+    <string name="onboarding_2_body">Invite collaborators as Viewer, Commenter or Editor and manage link access anytime.</string>
+    <string name="onboarding_3_title">Find it fast</string>
+    <string name="onboarding_3_body">Instant search, smart type filters, nested breadcrumbs and offline pinned files.</string>
+
+    <!-- Sign in & Drive Auth -->
+    <string name="welcome_to_cloudbox">Welcome to CloudBox</string>
+    <string name="sign_in_subtitle">Sign in with your Google account and connect Google Drive to browse, upload and share your files.</string>
+    <string name="continue_with_google">Continue with Google</string>
+    <string name="connect_google_drive">Connect Google Drive</string>
+    <string name="drive_permission_title">Connect your Google Drive</string>
+    <string name="drive_permission_body">CloudBox needs Drive file access (drive.file) to create folders, upload, preview, organize and share files directly in your Drive.</string>
+    <string name="reconnect_google_drive">Reconnect Google Drive</string>
+    <string name="sign_in_cancelled">Sign-in was cancelled. Tap below to try again.</string>
+    <string name="terms_privacy_prefix">By continuing you accept </string>
+    <string name="terms_label">Terms</string>
+    <string name="and_label"> and </string>
+    <string name="privacy_label">Privacy Policy</string>
+
+    <!-- Navigation -->
+    <string name="nav_home">Home</string>
+    <string name="nav_files">Files</string>
+    <string name="nav_shared">Shared</string>
+    <string name="nav_starred">Starred</string>
+    <string name="nav_offline">Offline</string>
+    <string name="nav_trash">Trash</string>
+    <string name="nav_storage">Storage</string>
+    <string name="nav_settings">Settings</string>
+
+    <!-- Home & Files -->
+    <string name="search_hint">Search in CloudBox</string>
+    <string name="google_drive_storage">Google Drive storage</string>
+    <string name="quick_access">Quick access</string>
+    <string name="recent">Recent</string>
+    <string name="see_all">See all</string>
+    <string name="my_files">My Files</string>
+    <string name="folders_section">FOLDERS</string>
+    <string name="files_section">FILES</string>
+    <string name="sort_and_filter">Sort &amp; filter</string>
+    <string name="grid_view">Grid</string>
+    <string name="list_view">List</string>
+    <string name="empty_home_title">Nothing here yet</string>
+    <string name="empty_home_body">Upload your first file to see it here</string>
+    <string name="empty_folder_title">This folder is empty</string>
+    <string name="empty_folder_body">Tap + to add files or create a folder</string>
+    <string name="upload_a_file">Upload a file</string>
+    <string name="new_folder">New folder</string>
+    <string name="no_filter_matches">No files match your filter</string>
+    <string name="clear_filter">Clear filter</string>
+
+    <!-- Create / Upload -->
+    <string name="create_new">Create new</string>
+    <string name="upload_files">Upload file</string>
+    <string name="upload_media">Upload photos or video</string>
+    <string name="take_photo">Take photo</string>
+    <string name="scan_document">Scan document</string>
+    <string name="folder_name_hint">Folder name</string>
+    <string name="create">Create</string>
+    <string name="cancel">Cancel</string>
+    <string name="retry">Retry</string>
+    <string name="offline_banner">You are offline. Showing saved files.</string>
+    <string name="sign_out">Sign out</string>
+</resources>

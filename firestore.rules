@@ -1,0 +1,124 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Global safety net: deny everything by default
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isBoundedStringList(value, maxItems, maxItemLength) {
+      return value is list &&
+        value.size() <= maxItems &&
+        (value.size() == 0 || (value[0] is string && value[0].size() <= maxItemLength));
+    }
+
+    function isValidPlant(data) {
+      return data.userId is string && data.userId.size() >= 1 && data.userId.size() <= 128 &&
+        data.commonName is string && data.commonName.size() >= 1 && data.commonName.size() <= 120 &&
+        data.scientificName is string && data.scientificName.size() >= 1 && data.scientificName.size() <= 160 &&
+        (!('nickname' in data) || (data.nickname is string && data.nickname.size() <= 80)) &&
+        data.confidence is string && data.confidence in ['High', 'Medium', 'Low'] &&
+        data.healthStatus is string && data.healthStatus in ['Healthy', 'Needs Attention', 'Stressed'] &&
+        (!('healthNotes' in data) || (data.healthNotes is string && data.healthNotes.size() <= 1500)) &&
+        (!('summary' in data) || (data.summary is string && data.summary.size() <= 1500)) &&
+        data.wateringFrequencyDays is int && data.wateringFrequencyDays >= 1 && data.wateringFrequencyDays <= 90 &&
+        (!('wateringDetails' in data) || (data.wateringDetails is string && data.wateringDetails.size() <= 1000)) &&
+        data.sunlightLevel is string && data.sunlightLevel.size() >= 1 && data.sunlightLevel.size() <= 100 &&
+        (!('sunlightDetails' in data) || (data.sunlightDetails is string && data.sunlightDetails.size() <= 1000)) &&
+        (!('soilType' in data) || (data.soilType is string && data.soilType.size() <= 600)) &&
+        (!('humidityTemp' in data) || (data.humidityTemp is string && data.humidityTemp.size() <= 600)) &&
+        (!('fertilizerSchedule' in data) || (data.fertilizerSchedule is string && data.fertilizerSchedule.size() <= 600)) &&
+        (!('pruningPropagation' in data) || (data.pruningPropagation is string && data.pruningPropagation.size() <= 1000)) &&
+        (!('petToxicity' in data) || (data.petToxicity is string && data.petToxicity.size() <= 500)) &&
+        (!('commonProblems' in data) || isBoundedStringList(data.commonProblems, 10, 400)) &&
+        (!('careTips' in data) || isBoundedStringList(data.careTips, 10, 400)) &&
+        (!('lastWateredAt' in data) || (data.lastWateredAt is timestamp && data.lastWateredAt <= request.time)) &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    function isValidChatMessage(data) {
+      return data.userId is string && data.userId.size() >= 1 && data.userId.size() <= 128 &&
+        data.role is string && data.role in ['user', 'model'] &&
+        data.text is string && data.text.size() >= 1 && data.text.size() <= 12000 &&
+        (!('plantContext' in data) || (data.plantContext is string && data.plantContext.size() <= 160)) &&
+        data.createdAt is timestamp;
+    }
+
+    match /users/{userId}/plants/{plantId} {
+      allow get: if isOwner(userId) && isValidId(plantId);
+      allow list: if isOwner(userId);
+
+      allow create: if isOwner(userId) &&
+        isValidId(plantId) &&
+        incoming().userId == request.auth.uid &&
+        incoming().keys().hasAll([
+          'userId', 'commonName', 'scientificName', 'confidence',
+          'healthStatus', 'wateringFrequencyDays', 'sunlightLevel',
+          'createdAt', 'updatedAt'
+        ]) &&
+        incoming().keys().hasOnly([
+          'userId', 'commonName', 'scientificName', 'nickname', 'confidence',
+          'healthStatus', 'healthNotes', 'summary', 'wateringFrequencyDays',
+          'wateringDetails', 'sunlightLevel', 'sunlightDetails', 'soilType',
+          'humidityTemp', 'fertilizerSchedule', 'pruningPropagation',
+          'petToxicity', 'commonProblems', 'careTips', 'lastWateredAt',
+          'createdAt', 'updatedAt'
+        ]) &&
+        incoming().createdAt is timestamp && incoming().createdAt <= request.time &&
+        incoming().updatedAt is timestamp && incoming().updatedAt <= request.time &&
+        isValidPlant(incoming());
+
+      allow update: if isOwner(userId) &&
+        isValidId(plantId) &&
+        isValidPlant(incoming()) &&
+        incoming().userId == existing().userId &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().updatedAt is timestamp && incoming().updatedAt <= request.time &&
+        (
+          incoming().diff(existing()).affectedKeys().hasOnly(['lastWateredAt', 'updatedAt']) ||
+          incoming().diff(existing()).affectedKeys().hasOnly(['nickname', 'wateringFrequencyDays', 'healthStatus', 'healthNotes', 'updatedAt'])
+        );
+
+      allow delete: if isOwner(userId) && isValidId(plantId);
+    }
+
+    match /users/{userId}/chatMessages/{messageId} {
+      allow get: if isOwner(userId) && isValidId(messageId);
+      allow list: if isOwner(userId);
+
+      allow create: if isOwner(userId) &&
+        isValidId(messageId) &&
+        incoming().userId == request.auth.uid &&
+        incoming().keys().hasAll(['userId', 'role', 'text', 'createdAt']) &&
+        incoming().keys().hasOnly(['userId', 'role', 'text', 'plantContext', 'createdAt']) &&
+        incoming().createdAt is timestamp && incoming().createdAt <= request.time &&
+        isValidChatMessage(incoming());
+
+      allow update: if false;
+      allow delete: if isOwner(userId) && isValidId(messageId);
+    }
+  }
+}
