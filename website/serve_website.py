@@ -1,6 +1,6 @@
 """
 Simple local development server for CloudBox website with correct APK MIME types and headers.
-Run this script to test downloading CloudBox-v1.0.apk on your computer or mobile phone.
+Run this script to test downloading CloudBox-v1.1.apk on your computer or mobile phone.
 """
 
 import http.server
@@ -48,7 +48,7 @@ if __name__ == "__main__":
     print("=" * 60)
     print(f"  * On this PC:         http://localhost:{PORT}")
     print(f"  * On your Phone:      http://{local_ip}:{PORT}")
-    print(f"  * Direct APK Test:    http://localhost:{PORT}/downloads/CloudBox-v1.0.apk")
+    print(f"  * Direct APK Test:    http://localhost:{PORT}/downloads/CloudBox-v1.1.apk")
     print("=" * 60)
     print("Press Ctrl+C to stop the server.\n")
 

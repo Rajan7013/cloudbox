@@ -1,6 +1,13 @@
 package com.example.ui.viewer
 
 import com.example.model.ReaderTheme
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.material.icons.filled.Fullscreen
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.calculateZoom
+import androidx.compose.foundation.gestures.calculatePan
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Print
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.ColorMatrix
@@ -111,7 +118,6 @@ import com.example.model.CloudFile
 import com.example.ui.theme.LocalCloudBoxColors
 import com.example.util.FormatUtils
 import java.io.File
-import kotlin.math.hypot
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -128,11 +134,14 @@ enum class AnnotationTool {
   ERASER       // Erase strokes
 }
 
+enum class PenTip { Round, Marker, Calligraphy }
+
 data class DrawnStroke(
   val points: List<Offset>,
   val color: Color,
   val strokeWidth: Float,
   val isHighlighter: Boolean = false,
+  val tip: PenTip = PenTip.Round,
 )
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -140,6 +149,9 @@ data class DrawnStroke(
 fun AdvancedPdfViewerPane(
   fileMeta: CloudFile,
   pdfFile: File,
+  immersive: Boolean,
+  toggleImmersive: () -> Unit,
+  onSettings: () -> Unit,
   bookmarkedPages: List<Int>,
   onToggleBookmark: (Int) -> Unit,
   onBack: () -> Unit,
@@ -150,11 +162,31 @@ fun AdvancedPdfViewerPane(
   val extra = LocalCloudBoxColors.current
   val scope = rememberCoroutineScope()
 
+  val account = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid.orEmpty()
+  val preferences = remember(account, fileMeta.id, fileMeta.modifiedTimeEpochMs) {
+    context.getSharedPreferences("reader_${account}_${fileMeta.id}_${fileMeta.modifiedTimeEpochMs}", android.content.Context.MODE_PRIVATE)
+  }
+  val ink = remember(preferences) { PageInk(preferences) }
+  var pageDialog by remember { mutableStateOf(false) }
+  var indexing by remember(pdfFile) { mutableStateOf(true) }
+  var pageError by remember(pdfFile) { mutableStateOf(false) }
+  var markerWidth by remember { mutableFloatStateOf(28f) }
+  var eraseRadius by remember { mutableFloatStateOf(30f) }
+  var penTip by remember { mutableStateOf(PenTip.Round) }
+  var opacity by remember { mutableFloatStateOf(0.35f) }
   var pageCount by remember(pdfFile) { mutableIntStateOf(0) }
-  var currentPage by remember(pdfFile) { mutableIntStateOf(0) }
-  var scrollMode by remember { mutableStateOf(PdfScrollMode.HORIZONTAL) }
-  var readerTheme by remember { mutableStateOf(ReaderTheme.LIGHT) }
+  var currentPage by remember(pdfFile) { mutableIntStateOf(preferences.getInt("page", 0)) }
+  val kind = ReaderKind.forFile(fileMeta)
+  val direction = readerDefault(ReaderKind.PDF)
+  val appearance = readerDefault(kind)
+  var scrollMode by remember(direction) {
+    mutableStateOf(if (kind != ReaderKind.SLIDES && direction == "Vertical") PdfScrollMode.VERTICAL else PdfScrollMode.HORIZONTAL)
+  }
+  var readerTheme by remember(appearance) { mutableStateOf(ReaderTheme.entries.firstOrNull { it.name.equals(appearance, true) } ?: ReaderTheme.valueOf(preferences.getString("theme", "LIGHT")!!)) }
 
+  LaunchedEffect(currentPage, scrollMode, readerTheme) {
+    preferences.edit().putInt("page", currentPage).putString("theme", readerTheme.name).apply()
+  }
   // Zoom & Pan state
   var zoomScale by remember { mutableFloatStateOf(1f) }
   var panOffset by remember { mutableStateOf(Offset.Zero) }
@@ -164,15 +196,46 @@ fun AdvancedPdfViewerPane(
   var penColor by remember { mutableStateOf(Color(0xFF2563EB)) }
   var penStrokeWidth by remember { mutableFloatStateOf(8f) }
   var highlighterColor by remember { mutableStateOf(Color(0xFFFDE047)) }
-  val pageStrokes = remember { mutableStateMapOf<Int, MutableList<DrawnStroke>>() }
+  val pageStrokes = remember(pdfFile) { mutableStateMapOf<Int, MutableList<DrawnStroke>>() }
+  fun strokesFor(page: Int) = pageStrokes.getOrPut(page) {
+    androidx.compose.runtime.mutableStateListOf<DrawnStroke>().apply { addAll(ink.load(page)) }
+  }
+  var drawingPage by remember { mutableIntStateOf(-1) }
   var activeDrawingPoints by remember { mutableStateOf<List<Offset>>(emptyList()) }
 
   // In-Document Search state
   var showSearch by remember { mutableStateOf(false) }
   var searchQuery by remember { mutableStateOf("") }
-  var extractedPageTexts by remember(pdfFile) { mutableStateOf<Map<Int, String>>(emptyMap()) }
+  var pages by remember(pdfFile) { mutableStateOf<Map<Int, IndexedPage>>(emptyMap()) }
+  val extractedPageTexts = remember(pages) { pages.mapValues { it.value.text } }
   var matchingPages by remember { mutableStateOf<List<Int>>(emptyList()) }
   var currentMatchIndex by remember { mutableIntStateOf(0) }
+
+  var scanJob by remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }
+  var scanStatus by remember { mutableStateOf("") }
+  fun scanMissingPages() {
+    val missing = (0 until pageCount).filter { pages[it]?.text.isNullOrBlank() }.toSet()
+    scanJob = scope.launch {
+      scanStatus = "Reading scan…"
+      var done = 0
+      try {
+        withContext(Dispatchers.IO) {
+          recognizePdf(pdfFile, missing) { index, page ->
+            withContext(Dispatchers.Main) {
+              pages = pages + (index to page)
+              done++
+              scanStatus = "OCR $done/${missing.size}"
+            }
+          }
+        }
+        scanStatus = "OCR complete"
+      } catch (e: kotlinx.coroutines.CancellationException) {
+        scanStatus = "OCR stopped"
+        throw e
+      } catch (_: Exception) { scanStatus = "Could not recognize text" }
+      finally { scanJob = null }
+    }
+  }
 
   // Voice Reader (TTS) state
   var showVoiceReader by remember { mutableStateOf(false) }
@@ -201,9 +264,10 @@ fun AdvancedPdfViewerPane(
         ParcelFileDescriptor.open(pdfFile, ParcelFileDescriptor.MODE_READ_ONLY).use { pfd ->
           PdfRenderer(pfd).use { renderer ->
             pageCount = renderer.pageCount
+            currentPage = currentPage.coerceIn(0, (pageCount - 1).coerceAtLeast(0))
           }
         }
-      } catch (_: Exception) {}
+      } catch (_: Exception) { pageError = true }
     }
   }
 
@@ -211,9 +275,10 @@ fun AdvancedPdfViewerPane(
   LaunchedEffect(pdfFile, pageCount) {
     if (pageCount > 0) {
       withContext(Dispatchers.IO) {
-        val texts = PdfTextExtractor.extractTextByPage(pdfFile, pageCount)
+        val texts = try { PdfTextExtractor.index(context, pdfFile) } catch (_: java.io.IOException) { emptyMap() }
         withContext(Dispatchers.Main) {
-          extractedPageTexts = texts
+          pages = texts
+          indexing = false
         }
       }
     }
@@ -226,20 +291,21 @@ fun AdvancedPdfViewerPane(
       matchingPages = emptyList()
       currentMatchIndex = 0
     } else {
-      val matches = mutableListOf<Int>()
-      for (p in 0 until pageCount) {
-        val text = extractedPageTexts[p].orEmpty()
-        if (text.contains(q, ignoreCase = true)) {
-          matches.add(p)
+      kotlinx.coroutines.delay(200)
+      val matches = withContext(Dispatchers.Default) {
+        buildList {
+          for (p in 0 until pageCount) repeat(pages[p]?.bounds(q)?.size ?: 0) { add(p) }
         }
       }
       matchingPages = matches
       currentMatchIndex = 0
-      if (matches.isNotEmpty() && !matches.contains(currentPage)) {
+      if (matches.isNotEmpty()) {
         currentPage = matches.first()
       }
     }
   }
+
+  if (pageDialog) PdfPageDialog(pdfFile, fileMeta.name, currentPage, pageCount, bookmarkedPages, fileMeta.canDownload, { currentPage = it }, { pageDialog = false })
 
   val paperColor =
     when (readerTheme) {
@@ -254,7 +320,7 @@ fun AdvancedPdfViewerPane(
       .background(MaterialTheme.colorScheme.background)
   ) {
     // Top Bar with full filename, reading modes, search, voice, and tools
-    Surface(
+    if (!immersive) Surface(
       color = MaterialTheme.colorScheme.surface,
       tonalElevation = 2.dp,
       border = BorderStroke(1.dp, extra.border.copy(alpha = 0.5f))
@@ -278,12 +344,15 @@ fun AdvancedPdfViewerPane(
               overflow = TextOverflow.Ellipsis,
             )
             Text(
-              text = "PDF · ${if (pageCount > 0) "Page ${currentPage + 1} of $pageCount" else "Loading..."}",
+              text = "${when (fileMeta.mimeType) { "application/vnd.google-apps.presentation" -> "Slides"; "application/vnd.google-apps.document" -> "Docs"; else -> "PDF" }} · ${if (pageCount > 0) "Page ${currentPage + 1} of $pageCount" else "Loading..."}",
               style = MaterialTheme.typography.bodySmall,
               color = extra.textSecondary,
             )
           }
 
+        }
+        Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState())) {
+          IconButton(onClick = onSettings) { Icon(Icons.Filled.Settings, "Viewer settings") }
           // Scroll mode toggle (Vertical continuous vs Horizontal book swipe)
           IconButton(
             onClick = {
@@ -343,6 +412,15 @@ fun AdvancedPdfViewerPane(
             )
           }
 
+          if (fileMeta.canDownload) {
+            IconButton(onClick = { printPdfFile(context, pdfFile, fileMeta.name) }) { Icon(Icons.Filled.Print, "Print original") }
+          }
+          if (fileMeta.isGoogleWorkspaceDoc && fileMeta.webViewLink?.startsWith("https://") == true) {
+            TextButton(onClick = {
+              try { context.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(fileMeta.webViewLink))) }
+              catch (_: android.content.ActivityNotFoundException) { android.widget.Toast.makeText(context, "No app available to open this link", android.widget.Toast.LENGTH_SHORT).show() }
+            }) { Text("Open in Google") }
+          }
           // More actions menu
           IconButton(onClick = onOpenMoreActions, modifier = Modifier.size(40.dp)) {
             Icon(Icons.Filled.MoreVert, contentDescription = "More")
@@ -387,9 +465,9 @@ fun AdvancedPdfViewerPane(
                   color = MaterialTheme.colorScheme.primary
                 )
                 IconButton(
-                  enabled = currentMatchIndex > 0,
+                  enabled = matchingPages.size > 1,
                   onClick = {
-                    currentMatchIndex--
+                    currentMatchIndex = (currentMatchIndex + matchingPages.size - 1) % matchingPages.size
                     currentPage = matchingPages[currentMatchIndex]
                   },
                   modifier = Modifier.size(36.dp)
@@ -397,9 +475,9 @@ fun AdvancedPdfViewerPane(
                   Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, contentDescription = "Previous match")
                 }
                 IconButton(
-                  enabled = currentMatchIndex < matchingPages.lastIndex,
+                  enabled = matchingPages.size > 1,
                   onClick = {
-                    currentMatchIndex++
+                    currentMatchIndex = (currentMatchIndex + 1) % matchingPages.size
                     currentPage = matchingPages[currentMatchIndex]
                   },
                   modifier = Modifier.size(36.dp)
@@ -408,12 +486,21 @@ fun AdvancedPdfViewerPane(
                 }
               } else if (searchQuery.isNotBlank()) {
                 Spacer(modifier = Modifier.width(6.dp))
-                Text("No match", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
+                Text(if (indexing) "Indexing…" else if (extractedPageTexts.values.none { it.isNotBlank() }) "No text layer" else "No match", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
               }
             }
           }
         }
 
+        if (showSearch && !indexing && (scanStatus.isNotEmpty() || (0 until pageCount).any { pages[it]?.text.isNullOrBlank() })) {
+          Row(verticalAlignment = Alignment.CenterVertically) {
+            if (scanStatus.isNotEmpty()) Text(scanStatus, style = MaterialTheme.typography.labelSmall)
+            if (scanJob != null) TextButton(onClick = { scanJob?.cancel() }) { Text("Stop OCR") }
+            else if ((0 until pageCount).any { pages[it]?.text.isNullOrBlank() }) {
+              TextButton(onClick = { scanMissingPages() }) { Text("Recognize scanned pages") }
+            }
+          }
+        }
         // Voice Reader Control Bar (Indian Voice TTS)
         AnimatedVisibility(
           visible = showVoiceReader,
@@ -540,6 +627,7 @@ fun AdvancedPdfViewerPane(
                     val list = pageStrokes[currentPage]
                     if (!list.isNullOrEmpty()) {
                       list.removeAt(list.lastIndex)
+                      ink.save(currentPage, list)
                     }
                   },
                   modifier = Modifier.size(36.dp)
@@ -549,12 +637,27 @@ fun AdvancedPdfViewerPane(
 
                 // Clear page annotations
                 TextButton(
-                  onClick = { pageStrokes[currentPage]?.clear() }
+                  onClick = { strokesFor(currentPage).clear(); ink.save(currentPage, emptyList()) }
                 ) {
                   Text("Clear", color = MaterialTheme.colorScheme.error)
                 }
               }
 
+              if (activeTool == AnnotationTool.ERASER) {
+                Text("Eraser radius ${eraseRadius.toInt()} px")
+                Slider(value = eraseRadius, onValueChange = { eraseRadius = it }, valueRange = 6f..70f)
+              }
+              if (activeTool == AnnotationTool.PEN) {
+                Row(Modifier.horizontalScroll(rememberScrollState())) {
+                  PenTip.entries.forEach { tip ->
+                    FilterChip(selected = penTip == tip, onClick = { penTip = tip }, label = { Text(tip.name) })
+                  }
+                }
+              }
+              if (activeTool == AnnotationTool.HIGHLIGHTER) {
+                Text("Opacity ${(opacity * 100).toInt()}%")
+                Slider(value = opacity, onValueChange = { opacity = it }, valueRange = 0.1f..0.8f)
+              }
               // Color & Stroke width selectors when Pen or Highlighter is active
               if (activeTool == AnnotationTool.PEN || activeTool == AnnotationTool.HIGHLIGHTER) {
                 Spacer(modifier = Modifier.height(8.dp))
@@ -619,10 +722,10 @@ fun AdvancedPdfViewerPane(
                   }
 
                   widths.forEach { (w, label) ->
-                    val isSelected = penStrokeWidth == w
+                    val isSelected = (if (activeTool == AnnotationTool.PEN) penStrokeWidth else markerWidth) == w
                     FilterChip(
                       selected = isSelected,
-                      onClick = { penStrokeWidth = w },
+                      onClick = { if (activeTool == AnnotationTool.PEN) penStrokeWidth = w else markerWidth = w },
                       label = { Text(label, style = MaterialTheme.typography.labelSmall) }
                     )
                   }
@@ -646,9 +749,9 @@ fun AdvancedPdfViewerPane(
           modifier = Modifier.align(Alignment.Center),
           horizontalAlignment = Alignment.CenterHorizontally
         ) {
-          CircularProgressIndicator(strokeWidth = 2.5.dp)
+          if (!pageError) CircularProgressIndicator(strokeWidth = 2.5.dp)
           Spacer(modifier = Modifier.height(12.dp))
-          Text("Rendering document…", style = MaterialTheme.typography.bodyMedium, color = extra.textSecondary)
+          Text(if (pageError) "Unable to open this PDF. It may be locked or damaged." else "Rendering document…", style = MaterialTheme.typography.bodyMedium, color = extra.textSecondary)
         }
       } else {
         if (scrollMode == PdfScrollMode.HORIZONTAL) {
@@ -657,7 +760,7 @@ fun AdvancedPdfViewerPane(
 
           LaunchedEffect(currentPage) {
             if (pagerState.currentPage != currentPage) {
-              pagerState.animateScrollToPage(currentPage)
+              pagerState.scrollToPage(currentPage)
             }
           }
           LaunchedEffect(pagerState.currentPage) {
@@ -668,6 +771,7 @@ fun AdvancedPdfViewerPane(
 
           HorizontalPager(
             state = pagerState,
+            userScrollEnabled = activeTool == AnnotationTool.VIEW && zoomScale <= 1f,
             modifier = Modifier.fillMaxSize()
           ) { pageIdx ->
             PdfSinglePageView(
@@ -683,29 +787,34 @@ fun AdvancedPdfViewerPane(
               },
               activeTool = activeTool,
               penColor = penColor,
-              penStrokeWidth = penStrokeWidth,
-              highlighterColor = highlighterColor,
-              strokes = pageStrokes.getOrPut(pageIdx) { mutableListOf() },
-              activeDrawingPoints = if (pageIdx == currentPage) activeDrawingPoints else emptyList(),
-              onUpdateActivePoints = { activeDrawingPoints = it },
-              onAddStroke = { stroke -> pageStrokes.getOrPut(pageIdx) { mutableListOf() }.add(stroke) },
-              onEraseNearby = { touchOffset ->
+              penStrokeWidth = if (activeTool == AnnotationTool.HIGHLIGHTER) markerWidth else penStrokeWidth,
+              penTip = penTip,
+              highlighterColor = highlighterColor.copy(alpha = opacity),
+              strokes = strokesFor(pageIdx),
+              activeDrawingPoints = if (pageIdx == drawingPage) activeDrawingPoints else emptyList(),
+              onUpdateActivePoints = { drawingPage = pageIdx; activeDrawingPoints = it },
+              onAddStroke = { stroke -> strokesFor(pageIdx).add(stroke); ink.save(pageIdx, strokesFor(pageIdx)) },
+              onEraseNearby = { touchOffset, width, height ->
                 val list = pageStrokes[pageIdx] ?: return@PdfSinglePageView
-                list.removeAll { stroke ->
-                  stroke.points.any { p -> hypot((p.x - touchOffset.x).toDouble(), (p.y - touchOffset.y).toDouble()) < 30.0 }
-                }
+                if (list.removeAll { stroke ->
+                  stroke.intersects(touchOffset, width, height, eraseRadius)
+                }) ink.save(pageIdx, list)
               },
-              searchMatch = matchingPages.contains(pageIdx),
+              indexedPage = pages[pageIdx],
+              activeHit = if (matchingPages.getOrNull(currentMatchIndex) == pageIdx) currentMatchIndex - matchingPages.indexOf(pageIdx) else -1,
               searchQuery = searchQuery
             )
           }
         } else {
           // Vertical Continuous Scroll View (Scroll up/down through all pages)
-          val listState = rememberLazyListState()
+          val listState = rememberLazyListState(initialFirstVisibleItemIndex = currentPage)
+          LaunchedEffect(listState.isScrollInProgress) {
+            if (!listState.isScrollInProgress) currentPage = listState.firstVisibleItemIndex
+          }
 
           LaunchedEffect(currentPage) {
             if (!listState.isScrollInProgress) {
-              listState.animateScrollToItem(currentPage)
+              listState.scrollToItem(currentPage)
             }
           }
 
@@ -746,19 +855,21 @@ fun AdvancedPdfViewerPane(
                   },
                   activeTool = activeTool,
                   penColor = penColor,
-                  penStrokeWidth = penStrokeWidth,
-                  highlighterColor = highlighterColor,
-                  strokes = pageStrokes.getOrPut(pageIdx) { mutableListOf() },
-                  activeDrawingPoints = if (pageIdx == currentPage) activeDrawingPoints else emptyList(),
-                  onUpdateActivePoints = { activeDrawingPoints = it },
-                  onAddStroke = { stroke -> pageStrokes.getOrPut(pageIdx) { mutableListOf() }.add(stroke) },
-                  onEraseNearby = { touchOffset ->
+                  penStrokeWidth = if (activeTool == AnnotationTool.HIGHLIGHTER) markerWidth else penStrokeWidth,
+              penTip = penTip,
+                  highlighterColor = highlighterColor.copy(alpha = opacity),
+                  strokes = strokesFor(pageIdx),
+                  activeDrawingPoints = if (pageIdx == drawingPage) activeDrawingPoints else emptyList(),
+                  onUpdateActivePoints = { drawingPage = pageIdx; activeDrawingPoints = it },
+                  onAddStroke = { stroke -> strokesFor(pageIdx).add(stroke); ink.save(pageIdx, strokesFor(pageIdx)) },
+                  onEraseNearby = { touchOffset, width, height ->
                     val list = pageStrokes[pageIdx] ?: return@PdfSinglePageView
-                    list.removeAll { stroke ->
-                      stroke.points.any { p -> hypot((p.x - touchOffset.x).toDouble(), (p.y - touchOffset.y).toDouble()) < 30.0 }
-                    }
+                    if (list.removeAll { stroke ->
+                      stroke.intersects(touchOffset, width, height, eraseRadius)
+                    }) ink.save(pageIdx, list)
                   },
-                  searchMatch = matchingPages.contains(pageIdx),
+                  indexedPage = pages[pageIdx],
+              activeHit = if (matchingPages.getOrNull(currentMatchIndex) == pageIdx) currentMatchIndex - matchingPages.indexOf(pageIdx) else -1,
                   searchQuery = searchQuery
                 )
               }
@@ -792,10 +903,11 @@ fun AdvancedPdfViewerPane(
           }
         }
       }
+      if (immersive) TextButton(onClick = toggleImmersive, modifier = Modifier.align(Alignment.TopEnd)) { Text("Exit full screen") }
     }
 
     // Bottom Navigation & Reading Controls Bar (No download/share clutter!)
-    Surface(
+    if (!immersive) Surface(
       color = MaterialTheme.colorScheme.surface,
       tonalElevation = 3.dp,
       border = BorderStroke(1.dp, extra.border.copy(alpha = 0.5f))
@@ -822,7 +934,7 @@ fun AdvancedPdfViewerPane(
           text = "${currentPage + 1} / $pageCount",
           style = MaterialTheme.typography.labelLarge,
           fontWeight = FontWeight.SemiBold,
-          modifier = Modifier.padding(horizontal = 4.dp)
+          modifier = Modifier.clickable(enabled = pageCount > 0) { pageDialog = true }.padding(horizontal = 4.dp)
         )
 
         IconButton(
@@ -852,6 +964,7 @@ fun AdvancedPdfViewerPane(
           Spacer(modifier = Modifier.weight(1f))
         }
 
+        IconButton(onClick = toggleImmersive) { Icon(Icons.Filled.Fullscreen, "Full screen") }
         // Bookmark page toggle
         val isBookmarked = currentPage in bookmarkedPages
         IconButton(
@@ -895,17 +1008,21 @@ private fun PdfSinglePageView(
   activeTool: AnnotationTool,
   penColor: Color,
   penStrokeWidth: Float,
+  penTip: PenTip,
   highlighterColor: Color,
   strokes: List<DrawnStroke>,
   activeDrawingPoints: List<Offset>,
   onUpdateActivePoints: (List<Offset>) -> Unit,
   onAddStroke: (DrawnStroke) -> Unit,
-  onEraseNearby: (Offset) -> Unit,
-  searchMatch: Boolean,
+  onEraseNearby: (Offset, Float, Float) -> Unit,
+  indexedPage: IndexedPage?,
+  activeHit: Int,
   searchQuery: String,
 ) {
   val extra = LocalCloudBoxColors.current
 
+  val latestZoom by androidx.compose.runtime.rememberUpdatedState(zoomScale)
+  val latestOffset by androidx.compose.runtime.rememberUpdatedState(panOffset)
   // Render Page Bitmap
   val bitmap by produceState<Bitmap?>(initialValue = null, pdfFile, pageIndex, readerTheme) {
     value = withContext(Dispatchers.IO) {
@@ -914,9 +1031,9 @@ private fun PdfSinglePageView(
           PdfRenderer(pfd).use { renderer ->
             if (pageIndex in 0 until renderer.pageCount) {
               renderer.openPage(pageIndex).use { page ->
-                val scale = 2.0f
-                val w = (page.width * scale).toInt().coerceIn(300, 2600)
-                val h = (page.height * scale).toInt().coerceIn(400, 3400)
+                val scale = minOf(2f, 2600f / page.width, 3400f / page.height)
+                val w = (page.width * scale).toInt().coerceAtLeast(1)
+                val h = (page.height * scale).toInt().coerceAtLeast(1)
                 val raw = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
                 val c = Canvas(raw)
                 c.drawColor(android.graphics.Color.WHITE)
@@ -977,22 +1094,27 @@ private fun PdfSinglePageView(
           // Pinch-to-zoom & double-tap gesture when in VIEW mode
           .pointerInput(activeTool) {
             if (activeTool == AnnotationTool.VIEW) {
-              detectTransformGestures { _, pan, zoom, _ ->
-                val newScale = (zoomScale * zoom).coerceIn(1f, 4f)
-                val newOffset = if (newScale > 1f) {
-                  Offset(panOffset.x + pan.x, panOffset.y + pan.y)
-                } else {
-                  Offset.Zero
-                }
-                onZoomChange(newScale, newOffset)
+              awaitEachGesture {
+                var scale = latestZoom
+                var offset = latestOffset
+                do {
+                  val event = awaitPointerEvent()
+                  if (event.changes.count { it.pressed } >= 2 || scale > 1f && event.changes.any { it.position != it.previousPosition }) {
+                    scale = (scale * event.calculateZoom()).coerceIn(1f, 5f)
+                    offset = if (scale > 1f) offset + event.calculatePan() else Offset.Zero
+                    onZoomChange(scale, offset)
+                    event.changes.forEach { it.consume() }
+                  }
+                } while (event.changes.any { it.pressed })
               }
+
             }
           }
           .pointerInput(activeTool) {
             if (activeTool == AnnotationTool.VIEW) {
               detectTapGestures(
                 onDoubleTap = {
-                  if (zoomScale > 1.05f) {
+                  if (latestZoom > 1.05f) {
                     onZoomChange(1f, Offset.Zero)
                   } else {
                     onZoomChange(2.2f, Offset.Zero)
@@ -1002,23 +1124,27 @@ private fun PdfSinglePageView(
             }
           }
           // Pen & Highlighter & Eraser gesture
-          .pointerInput(activeTool, penColor, penStrokeWidth, highlighterColor) {
+          .pointerInput(activeTool, penColor, penStrokeWidth, highlighterColor, penTip) {
+            var points = emptyList<Offset>()
             if (activeTool == AnnotationTool.PEN || activeTool == AnnotationTool.HIGHLIGHTER) {
               detectDragGestures(
                 onDragStart = { start ->
-                  onUpdateActivePoints(listOf(start))
+                  points = listOf(start)
+                  onUpdateActivePoints(points)
                 },
                 onDrag = { change, _ ->
                   change.consume()
-                  onUpdateActivePoints(activeDrawingPoints + change.position)
+                  points = points + change.position
+                  onUpdateActivePoints(points)
                 },
                 onDragEnd = {
-                  if (activeDrawingPoints.size >= 2) {
+                  if (points.size >= 2) {
                     val isHl = activeTool == AnnotationTool.HIGHLIGHTER
                     val stroke = DrawnStroke(
-                      points = activeDrawingPoints,
-                      color = if (isHl) highlighterColor.copy(alpha = 0.35f) else penColor,
-                      strokeWidth = if (isHl) 28f else penStrokeWidth,
+                      points = points.map { Offset(it.x / size.width, it.y / size.height) },
+                      color = if (isHl) highlighterColor else penColor,
+                      strokeWidth = penStrokeWidth / size.width,
+                      tip = if (isHl) PenTip.Marker else penTip,
                       isHighlighter = isHl
                     )
                     onAddStroke(stroke)
@@ -1032,7 +1158,7 @@ private fun PdfSinglePageView(
             } else if (activeTool == AnnotationTool.ERASER) {
               detectDragGestures { change, _ ->
                 change.consume()
-                onEraseNearby(change.position)
+                onEraseNearby(change.position, size.width.toFloat(), size.height.toFloat())
               }
             }
           }
@@ -1040,82 +1166,32 @@ private fun PdfSinglePageView(
         // PDF Page Bitmap
         Image(
           bitmap = bmp.asImageBitmap(),
+          contentScale = androidx.compose.ui.layout.ContentScale.FillBounds,
           contentDescription = "PDF Page ${pageIndex + 1}",
           modifier = Modifier
             .fillMaxWidth()
+            .aspectRatio(bmp.width.toFloat() / bmp.height)
             .clip(RoundedCornerShape(8.dp))
             .border(1.dp, extra.border.copy(alpha = 0.4f), RoundedCornerShape(8.dp))
         )
 
         // Highlight indicator overlay if matched in search
-        if (searchMatch && searchQuery.isNotBlank()) {
-          Surface(
-            color = Color(0xFFF59E0B).copy(alpha = 0.22f),
-            modifier = Modifier
-              .matchParentSize()
-              .clip(RoundedCornerShape(8.dp))
-              .border(2.dp, Color(0xFFF59E0B), RoundedCornerShape(8.dp))
-          ) {
-            Box(modifier = Modifier.padding(12.dp), contentAlignment = Alignment.TopStart) {
-              Surface(
-                color = Color(0xFFF59E0B),
-                shape = RoundedCornerShape(6.dp)
-              ) {
-                Text(
-                  text = "Search Match: “$searchQuery”",
-                  style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
-                  color = Color.Black,
-                  modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-                )
-              }
-            }
+        val rectangles = remember(indexedPage, searchQuery) { indexedPage?.bounds(searchQuery.trim()).orEmpty() }
+        androidx.compose.foundation.Canvas(modifier = Modifier.matchParentSize()) {
+          rectangles.forEachIndexed { index, r ->
+            drawRect((if (index == activeHit) Color(0xFFFF9000) else Color.Yellow).copy(alpha = 0.48f), Offset(r.left * size.width, r.top * size.height),
+              androidx.compose.ui.geometry.Size(r.width() * size.width, r.height() * size.height))
           }
         }
 
         // Annotation Canvas (Draws strokes & active drawing path)
         androidx.compose.foundation.Canvas(modifier = Modifier.matchParentSize()) {
-          // Draw completed strokes
-          strokes.forEach { stroke ->
-            if (stroke.points.size >= 2) {
-              val path = Path().apply {
-                moveTo(stroke.points.first().x, stroke.points.first().y)
-                for (i in 1 until stroke.points.size) {
-                  lineTo(stroke.points[i].x, stroke.points[i].y)
-                }
-              }
-              drawPath(
-                path = path,
-                color = stroke.color,
-                style = Stroke(
-                  width = stroke.strokeWidth,
-                  cap = StrokeCap.Round,
-                  join = StrokeJoin.Round
-                )
-              )
-            }
+          for (stroke in strokes) {
+            drawInk(stroke.points, stroke.color, stroke.strokeWidth * size.width, stroke.tip, normalized = true)
           }
-
-          // Draw active drawing points currently being dragged
-          if (activeDrawingPoints.size >= 2) {
-            val isHl = activeTool == AnnotationTool.HIGHLIGHTER
-            val strokeCol = if (isHl) highlighterColor.copy(alpha = 0.35f) else penColor
-            val strokeW = if (isHl) 28f else penStrokeWidth
-            val activePath = Path().apply {
-              moveTo(activeDrawingPoints.first().x, activeDrawingPoints.first().y)
-              for (i in 1 until activeDrawingPoints.size) {
-                lineTo(activeDrawingPoints[i].x, activeDrawingPoints[i].y)
-              }
-            }
-            drawPath(
-              path = activePath,
-              color = strokeCol,
-              style = Stroke(
-                width = strokeW,
-                cap = StrokeCap.Round,
-                join = StrokeJoin.Round
-              )
-            )
-          }
+          val marking = activeTool == AnnotationTool.HIGHLIGHTER
+          drawInk(activeDrawingPoints, if (marking) highlighterColor else penColor,
+            penStrokeWidth, if (marking) PenTip.Marker else penTip, normalized = false)
         }
       }
     } else {
@@ -1129,4 +1205,40 @@ private fun PdfSinglePageView(
       }
     }
   }
+}
+
+
+private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawInk(
+  points: List<Offset>, color: Color, width: Float, tip: PenTip, normalized: Boolean,
+) {
+  if (points.size < 2) return
+  fun point(i: Int) = if (normalized) Offset(points[i].x * size.width, points[i].y * size.height) else points[i]
+  val path = Path()
+  val start = point(0)
+  if (tip == PenTip.Calligraphy) {
+    val nib = Offset(width * 0.42f, -width * 0.26f)
+    path.moveTo(start.x + nib.x, start.y + nib.y)
+    for (i in 1 until points.size) (point(i) + nib).let { path.lineTo(it.x, it.y) }
+    for (i in points.indices.reversed()) (point(i) - nib).let { path.lineTo(it.x, it.y) }
+    path.close()
+    drawPath(path, color)
+  } else {
+    path.moveTo(start.x, start.y)
+    for (i in 1 until points.size) point(i).let { path.lineTo(it.x, it.y) }
+    drawPath(path, color, style = Stroke(width, cap = if (tip == PenTip.Marker) StrokeCap.Square else StrokeCap.Round, join = StrokeJoin.Round))
+  }
+}
+
+private fun DrawnStroke.intersects(touch: Offset, width: Float, height: Float, radius: Float): Boolean {
+  val distance = radius + strokeWidth * width / 2
+  for (i in 1 until points.size) {
+    val a = Offset(points[i - 1].x * width, points[i - 1].y * height)
+    val b = Offset(points[i].x * width, points[i].y * height)
+    val delta = b - a
+    val lengthSquared = delta.getDistanceSquared()
+    val fromA = touch - a
+    val t = if (lengthSquared == 0f) 0f else ((fromA.x * delta.x + fromA.y * delta.y) / lengthSquared).coerceIn(0f, 1f)
+    if ((fromA - delta * t).getDistanceSquared() <= distance * distance) return true
+  }
+  return false
 }

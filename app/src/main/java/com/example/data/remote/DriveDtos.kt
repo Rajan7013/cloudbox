@@ -64,6 +64,7 @@ data class DrivePersonDto(
 
 @JsonClass(generateAdapter = true)
 data class DriveCapabilitiesDto(
+  val canComment: Boolean? = null,
   val canEdit: Boolean? = null,
   val canShare: Boolean? = null,
   val canDelete: Boolean? = null,

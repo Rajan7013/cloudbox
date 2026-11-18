@@ -489,7 +489,7 @@ fun FileActionsSheet(
             testTag = "action_share",
           )
         }
-        if (!file.isFolder) {
+        if (!file.isFolder && file.canDownload) {
           SheetActionRow(
             icon = Icons.Filled.Download,
             label = "Download to device",
@@ -511,7 +511,7 @@ fun FileActionsSheet(
           },
           testTag = "action_star",
         )
-        if (!file.isFolder) {
+        if (!file.isFolder && (file.canDownload || file.offlineStatus == OfflineSyncStatus.SAVED)) {
           val isOffline = file.offlineStatus == OfflineSyncStatus.SAVED
           SheetActionRow(
             icon = Icons.Filled.OfflinePin,
@@ -551,7 +551,7 @@ fun FileActionsSheet(
         SheetActionRow(
           icon = Icons.Filled.ContentCopy,
           label = "Make a copy",
-          enabled = isOnline,
+          enabled = isOnline && file.canDownload,
           onClick = {
             onDismiss()
             onMakeCopy()

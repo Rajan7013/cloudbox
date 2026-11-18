@@ -39,6 +39,7 @@ data class CachedFileEntity(
   val sharingUserEmail: String?,
   val userRoleName: String,
   val canEdit: Boolean,
+  @androidx.room.ColumnInfo(defaultValue = "0") val canDownload: Boolean,
   val canShare: Boolean,
   val canDelete: Boolean,
   val webViewLink: String?,
@@ -178,7 +179,7 @@ interface PdfBookmarkDao {
     RecentSearchEntity::class,
     PdfBookmarkEntity::class,
   ],
-  version = 1,
+  version = 2,
   exportSchema = false,
 )
 abstract class CloudBoxDatabase : RoomDatabase() {
@@ -196,7 +197,12 @@ abstract class CloudBoxDatabase : RoomDatabase() {
           context.applicationContext,
           CloudBoxDatabase::class.java,
           "cloudbox_cache.db",
-        ).build().also { instance = it }
+        ).addMigrations(object : androidx.room.migration.Migration(1, 2) {
+          override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
+            db.execSQL("ALTER TABLE cached_files ADD COLUMN canDownload INTEGER NOT NULL DEFAULT 0")
+            db.execSQL("UPDATE cached_files SET canDownload = 1 WHERE ownedByMe = 1")
+          }
+        }).build().also { instance = it }
       }
   }
 }
@@ -224,6 +230,7 @@ fun CloudFile.toEntity(ownerUid: String, isSharedWithMe: Boolean): CachedFileEnt
     sharingUserEmail = sharingUserEmail,
     userRoleName = userRole.name,
     canEdit = canEdit,
+    canDownload = canDownload,
     canShare = canShare,
     canDelete = canDelete,
     webViewLink = webViewLink,
@@ -264,6 +271,7 @@ fun CachedFileEntity.toDomain(offlineEntity: OfflineFileEntity? = null): CloudFi
     sharingUserEmail = sharingUserEmail,
     userRole = role,
     canEdit = canEdit,
+    canDownload = canDownload,
     canShare = canShare,
     canDelete = canDelete,
     webViewLink = webViewLink,

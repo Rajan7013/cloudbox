@@ -479,6 +479,8 @@ fun SettingsScreen(
   onSignOut: () -> Unit,
 ) {
   val extra = LocalCloudBoxColors.current
+  var viewerDefaults by remember { mutableStateOf(false) }
+  if (viewerDefaults) com.example.ui.viewer.ViewerDefaultsDialog(null) { viewerDefaults = false }
   var confirmSignOut by remember { mutableStateOf(false) }
 
   Column(modifier = Modifier.fillMaxSize().testTag("settings_screen")) {
@@ -636,6 +638,7 @@ fun SettingsScreen(
             testTag = "setting_autoplay",
           )
           HorizontalDivider(color = extra.border)
+          SettingsLinkRow("Viewer settings", "Per file type") { viewerDefaults = true }
           SettingsSwitchRow(
             title = "Keep screen on in viewer",
             subtitle = "Prevent sleep while reading documents",

@@ -1,7 +1,7 @@
 {
-  "versionCode": 1,
-  "versionName": "1.0",
-  "apkUrl": "https://cloudbox-woad.vercel.app/downloads/CloudBox-v1.0.apk",
-  "changeLog": "• Recursive folder & subfolder upload.\n• Light mode status bar contrast fix.\n• Copy & move folders and files anywhere.\n• Fast Google Drive synchronization.",
+  "versionCode": 2,
+  "versionName": "1.1",
+  "apkUrl": "https://cloudbox-woad.vercel.app/downloads/CloudBox-v1.1.apk",
+  "changeLog": "Full-screen viewers, searchable PDF and scanned pages, private ink, page-image export, Office and Markdown previews, media controls and viewer settings.",
   "isMandatory": false
 }

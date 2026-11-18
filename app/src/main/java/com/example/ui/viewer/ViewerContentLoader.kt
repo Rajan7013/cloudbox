@@ -35,6 +35,8 @@ sealed interface ViewerContentState {
   data class ImageFile(val file: File) : ViewerContentState
   data class PdfFile(val file: File) : ViewerContentState
   data class TextFile(val text: String) : ViewerContentState
+  data class Slides(val pages: List<String>) : ViewerContentState
+  data class Workbook(val sheets: List<Pair<String, SpreadsheetData>>) : ViewerContentState
   data class Spreadsheet(val file: File, val data: SpreadsheetData) : ViewerContentState
   data class VideoOrAudio(val localFile: File) : ViewerContentState
   data class Archive(val file: File, val entries: List<ZipArchiveEntryInfo>, val extractedDir: File? = null) : ViewerContentState
@@ -63,6 +65,14 @@ class ViewerContentLoader(private val repository: FileRepository) {
       val downloaded = repository.downloadFileToCacheForViewer(file)
       _state.value =
         withContext(Dispatchers.IO) {
+          val extension = if (file.isGoogleWorkspaceDoc) downloaded.extension.lowercase() else file.name.substringAfterLast('.', "").lowercase()
+          when (extension) {
+            "docx" -> return@withContext OfficePreview(downloaded).use { ViewerContentState.TextFile(it.document()) }
+            "pptx" -> return@withContext OfficePreview(downloaded).use { ViewerContentState.Slides(it.slides()) }
+            "xlsx" -> return@withContext OfficePreview(downloaded).use { ViewerContentState.Workbook(it.workbook()) }
+            "odt", "odp", "ods" -> return@withContext OfficePreview(downloaded).use { it.openDocument(extension) }
+            "doc", "ppt", "xls", "rtf" -> return@withContext ViewerContentState.Unsupported(downloaded)
+          }
           when (file.category) {
             FileCategory.IMAGE -> ViewerContentState.ImageFile(downloaded)
             FileCategory.PDF -> ViewerContentState.PdfFile(downloaded)
@@ -77,7 +87,7 @@ class ViewerContentLoader(private val repository: FileRepository) {
                 if (ext == "pdf") {
                   ViewerContentState.PdfFile(downloaded)
                 } else {
-                  val content = downloaded.readText(Charsets.UTF_8).take(250_000)
+                  val content = readPreview(downloaded)
                   ViewerContentState.TextFile(content)
                 }
               }
@@ -88,14 +98,16 @@ class ViewerContentLoader(private val repository: FileRepository) {
               ViewerContentState.Archive(downloaded, entries)
             }
             FileCategory.FOLDER, FileCategory.OTHER -> {
-              if (downloaded.extension.lowercase() in setOf("txt", "md", "json", "xml", "log", "csv", "kt", "ts", "js")) {
-                ViewerContentState.TextFile(downloaded.readText(Charsets.UTF_8).take(250_000))
+              if (downloaded.extension.lowercase() in setOf("txt", "md", "json", "xml", "log", "csv", "kt", "ts", "js", "markdown", "yaml", "yml", "ini", "css", "java", "c", "cpp", "html", "py")) {
+                ViewerContentState.TextFile(readPreview(downloaded))
               } else {
                 ViewerContentState.Unsupported(downloaded)
               }
             }
           }
         }
+    } catch (e: kotlinx.coroutines.CancellationException) {
+      throw e
     } catch (e: Exception) {
       _state.value = ViewerContentState.Error(e.localizedMessage ?: "Can’t open this file")
     }
@@ -143,67 +155,46 @@ class ViewerContentLoader(private val repository: FileRepository) {
       }
     }
     val delimiter = if (ext == "tsv") '\t' else ','
-    val allRows = mutableListOf<List<String>>()
-    BufferedReader(InputStreamReader(FileInputStream(file), Charsets.UTF_8)).use { reader ->
-      var line = reader.readLine()
-      var count = 0
-      while (line != null && count < 500) {
-        allRows += parseCsvLine(line, delimiter)
-        line = reader.readLine()
-        count++
+    val rows = mutableListOf<List<String>>()
+    file.bufferedReader().use { reader ->
+      var row = mutableListOf<String>()
+      val field = StringBuilder()
+      var quoted = false
+      var ch = reader.read()
+      while (ch != -1 && rows.size < 500) {
+        when (val c = ch.toChar()) {
+          '"' -> {
+            if (quoted) {
+              reader.mark(1)
+              if (reader.read() == '"'.code) field.append('"')
+              else { quoted = false; reader.reset() }
+            } else if (field.isEmpty()) quoted = true else field.append(c)
+          }
+          delimiter -> if (quoted) field.append(c) else { row.add(field.toString()); field.clear() }
+          '\n', '\r' -> if (quoted) field.append(c) else {
+            if (c == '\r') { reader.mark(1); if (reader.read() != '\n'.code) reader.reset() }
+            row.add(field.toString()); rows.add(row); row = mutableListOf(); field.clear()
+          }
+          else -> field.append(c)
+        }
+        require(row.size <= 512 && field.length <= 250_000) { "Cell exceeds the local preview limit" }
+        ch = reader.read()
       }
+      if (rows.size < 500 && (row.isNotEmpty() || field.isNotEmpty())) { row.add(field.toString()); rows.add(row) }
     }
-    if (allRows.isEmpty()) {
-      return ViewerContentState.Spreadsheet(
-        file,
-        SpreadsheetData(emptyList(), emptyList(), 0.0, 0.0, 0),
-      )
-    }
-    val colCount = allRows.maxOf { it.size }.coerceAtLeast(1)
-    val colLetters = (0 until colCount).map { idx ->
-      val letter = ('A' + (idx % 26))
-      if (idx < 26) "$letter" else "${'A' + (idx / 26 - 1)}$letter"
-    }
-    val paddedRows = allRows.map { row ->
-      List(colCount) { idx -> row.getOrElse(idx) { "" } }
-    }
-    var sum = 0.0
-    var maxVal = 0.0
-    paddedRows.flatten().forEach { cell ->
-      val num = cell.replace(",", "").replace("$", "").trim().toDoubleOrNull()
-      if (num != null) {
-        sum += num
-        if (num > maxVal) maxVal = num
-      }
-    }
-    return ViewerContentState.Spreadsheet(
-      file = file,
-      data = SpreadsheetData(
-        headers = colLetters,
-        rows = paddedRows,
-        numericSum = sum,
-        largestValue = maxVal,
-        totalCells = paddedRows.size * colCount,
-      ),
-    )
+    return ViewerContentState.Spreadsheet(file, spreadsheetData(rows))
   }
 
-  private fun parseCsvLine(line: String, delimiter: Char): List<String> {
-    val result = mutableListOf<String>()
-    val current = StringBuilder()
-    var inQuotes = false
-    for (ch in line) {
-      when {
-        ch == '"' -> inQuotes = !inQuotes
-        ch == delimiter && !inQuotes -> {
-          result += current.toString().trim()
-          current.clear()
-        }
-        else -> current.append(ch)
+  private fun readPreview(file: File): String = file.bufferedReader().use { reader ->
+    val buffer = CharArray(8192)
+    buildString {
+      while (length < 250_000) {
+        val count = reader.read(buffer, 0, minOf(buffer.size, 250_000 - length))
+        if (count < 0) break
+        append(buffer, 0, count)
       }
+      if (reader.read() != -1) append("\n[Preview limited to 250,000 characters]")
     }
-    result += current.toString().trim()
-    return result
   }
 
   private fun readZipEntries(zipFile: File): List<ZipArchiveEntryInfo> {

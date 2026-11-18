@@ -672,24 +672,29 @@ class DriveFileRepository(
     }
 
   override suspend fun downloadFileToCacheForViewer(file: CloudFile): File =
+    cachedContent(file, workbook = file.mimeType == "application/vnd.google-apps.spreadsheet")
+
+  private suspend fun cachedContent(file: CloudFile, workbook: Boolean): File =
     withContext(Dispatchers.IO) {
       val localOffline = file.localOfflinePath?.let { File(it) }
       if (localOffline != null && localOffline.exists() && localOffline.length() > 0L) {
         return@withContext localOffline
       }
-      val cacheDir = File(context.cacheDir, "viewer_cache").apply { mkdirs() }
-      val targetName = "${file.id}_${sanitizeFileName(effectiveDisplayFileName(file))}"
+      val cacheDir = File(File(context.cacheDir, "viewer_cache"), currentUid()).apply { mkdirs() }
+      val displayName = if (workbook) "${file.name}.xlsx" else effectiveDisplayFileName(file)
+      val targetName = "${file.id}_${file.modifiedTimeEpochMs}_${sanitizeFileName(displayName)}"
       val cachedFile = File(cacheDir, targetName)
       if (cachedFile.exists() && cachedFile.length() > 0L) {
         return@withContext cachedFile
       }
-      streamDriveFileToTarget(file, cachedFile)
+      streamDriveFileToTarget(file, cachedFile, workbook)
       cachedFile
     }
 
   override suspend fun exportFileToUri(file: CloudFile, targetUri: Uri) {
+    check(file.canDownload) { "The owner has restricted downloads." }
     withContext(Dispatchers.IO) {
-      val cached = downloadFileToCacheForViewer(file)
+      val cached = cachedContent(file, workbook = false)
       val outStream =
         context.contentResolver.openOutputStream(targetUri)
           ?: throw IOException("Could not open destination file for saving.")
@@ -796,6 +801,11 @@ class DriveFileRepository(
             sizeBytes = offline.sizeBytes,
             modifiedTimeEpochMs = offline.remoteModifiedAtMs,
             createdTimeEpochMs = offline.syncedAtEpochMs,
+            ownedByMe = false,
+            userRole = AccessRole.VIEWER,
+            canShare = false,
+            canEdit = false,
+            canDelete = false,
             offlineStatus = resolvedStatus,
             localOfflinePath = offline.localPath,
           )
@@ -867,11 +877,11 @@ class DriveFileRepository(
     return dir.walkTopDown().filter { it.isFile }.sumOf { it.length() }
   }
 
-  private suspend fun streamDriveFileToTarget(file: CloudFile, targetFile: File) {
+  private suspend fun streamDriveFileToTarget(file: CloudFile, targetFile: File, workbook: Boolean = false) {
     val response = executeDriveCall {
       when {
         file.mimeType == "application/vnd.google-apps.spreadsheet" ->
-          api.exportGoogleDoc(file.id, "text/csv")
+          api.exportGoogleDoc(file.id, if (workbook) "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" else "text/csv")
         file.mimeType == "application/vnd.google-apps.document" ||
           file.mimeType == "application/vnd.google-apps.presentation" ->
           api.exportGoogleDoc(file.id, "application/pdf")
@@ -883,14 +893,13 @@ class DriveFileRepository(
     }
     val body = response.body() ?: throw IOException("Empty file stream from Google Drive.")
     targetFile.parentFile?.mkdirs()
-    val tempFile = File(targetFile.parentFile, "${targetFile.name}.tmp")
-    body.byteStream().use { input ->
-      FileOutputStream(tempFile).use { output ->
-        input.copyTo(output)
-      }
+    val tempFile = File.createTempFile("drive-", ".tmp", targetFile.parentFile)
+    try {
+      body.byteStream().use { input -> tempFile.outputStream().use { output -> input.copyTo(output) } }
+      android.system.Os.rename(tempFile.absolutePath, targetFile.absolutePath)
+    } finally {
+      tempFile.delete()
     }
-    if (targetFile.exists()) targetFile.delete()
-    tempFile.renameTo(targetFile)
   }
 
   private fun effectiveDisplayFileName(file: CloudFile): String =
@@ -966,6 +975,7 @@ class DriveFileRepository(
       when {
         isOwned -> AccessRole.OWNER
         capabilities?.canEdit == true -> AccessRole.EDITOR
+        capabilities?.canComment == true -> AccessRole.COMMENTER
         else -> AccessRole.VIEWER
       }
     val offlineStatus =
@@ -994,6 +1004,7 @@ class DriveFileRepository(
       sharingUserEmail = sharingUser?.emailAddress,
       userRole = userRole,
       canEdit = capabilities?.canEdit ?: isOwned,
+      canDownload = capabilities?.canDownload ?: isOwned,
       canShare = capabilities?.canShare ?: isOwned,
       canDelete = isOwned, // Enforce strictly: only the original owner can delete files or folders
       webViewLink = webViewLink,

@@ -458,16 +458,16 @@ private fun CloudBoxWorkspace(
               viewerFile != null -> {
                 val activeFile = viewerFile!!
                 val folderFiles = (filesState as? ScreenDataState.Success)?.data.orEmpty()
-                val siblingImages = folderFiles.filter { it.category == com.example.model.FileCategory.IMAGE }
+                val siblings = folderFiles.filter { it.parentId == activeFile.parentId && it.category == activeFile.category }
                 FileViewerScreen(
                   file = activeFile,
-                  siblingImages = siblingImages,
+                  siblings = siblings,
                   repository = viewModel.repository,
                   isOnline = networkStatus.isOnline,
                   autoplayMedia = settings.autoplayMedia,
                   keepScreenOn = settings.keepScreenOnViewer,
                   onBack = { viewerFile = null },
-                  onSelectSiblingImage = { nextImg -> viewerFile = nextImg },
+                  onSelectSibling = { selected -> openFileOrFolder(selected) },
                   onOpenMoreActions = { actionSheetFile = it },
                   onDownload = { startDownload(it) },
                   onShare = { openShareSheet(it) },

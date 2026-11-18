@@ -17,7 +17,7 @@ interface DriveApiService {
       "id,name,mimeType,size,modifiedTime,createdTime,trashedTime,parents,starred,trashed,shared," +
         "ownedByMe,owners(displayName,emailAddress,photoLink,me)," +
         "sharingUser(displayName,emailAddress,photoLink,me)," +
-        "capabilities(canEdit,canShare,canDelete,canTrash,canRename,canMoveItemWithinDrive,canCopy,canDownload)," +
+        "capabilities(canEdit,canComment,canShare,canDelete,canTrash,canRename,canMoveItemWithinDrive,canCopy,canDownload)," +
         "permissions(id,type,role,displayName,emailAddress,photoLink,allowFileDiscovery,expirationTime)," +
         "webViewLink,thumbnailLink,md5Checksum,fileExtension"
     const val LIST_FIELDS = "nextPageToken,files($FILE_FIELDS)"

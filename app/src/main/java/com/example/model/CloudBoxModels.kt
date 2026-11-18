@@ -158,6 +158,7 @@ data class CloudFile(
   val userRole: AccessRole = AccessRole.OWNER,
   val canEdit: Boolean = true,
   val canShare: Boolean = true,
+  val canDownload: Boolean = ownedByMe,
   val canDelete: Boolean = true,
   val webViewLink: String? = null,
   val thumbnailLink: String? = null,

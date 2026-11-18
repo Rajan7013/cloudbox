@@ -1,5 +1,8 @@
 package com.example.ui.viewer
 
+import androidx.compose.ui.text.fromHtml
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Info
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.Canvas
@@ -137,6 +140,16 @@ fun ImageViewerPane(
 ) {
   var scale by remember(imageFile) { mutableFloatStateOf(1f) }
   var offset by remember(imageFile) { mutableStateOf(Offset.Zero) }
+  val imageFit = readerDefault(ReaderKind.IMAGE)
+  var fill by remember(imageFile, imageFit) { mutableStateOf(imageFit == "Fill") }
+  var info by remember(imageFile) { mutableStateOf(false) }
+  val dimensions by androidx.compose.runtime.produceState("", imageFile, info) {
+    if (info) value = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+      val options = android.graphics.BitmapFactory.Options().apply { inJustDecodeBounds = true }
+      android.graphics.BitmapFactory.decodeFile(imageFile.path, options)
+      if (options.outWidth > 0) "${options.outWidth} × ${options.outHeight} · ${options.outMimeType}" else "Dimensions unavailable"
+    }
+  }
   var rotationDeg by remember(imageFile) { mutableFloatStateOf(0f) }
 
   Column(modifier = modifier.fillMaxSize()) {
@@ -176,7 +189,7 @@ fun ImageViewerPane(
       AsyncImage(
         model = imageFile,
         contentDescription = imageFile.name,
-        contentScale = ContentScale.Fit,
+        contentScale = if (fill) ContentScale.Crop else ContentScale.Fit,
         modifier =
           Modifier
             .fillMaxSize()
@@ -195,7 +208,7 @@ fun ImageViewerPane(
         color = Color.Black.copy(alpha = 0.65f),
       ) {
         Text(
-          text = "${(scale * 100).toInt()}%",
+          text = if (info) dimensions else "${(scale * 100).toInt()}%",
           style = MaterialTheme.typography.bodySmall,
           color = Color.White,
           modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
@@ -226,13 +239,16 @@ fun ImageViewerPane(
       modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
       horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
+      ViewerToolTile(Icons.Filled.Info, "Image info", active = info) { info = !info }
+      ViewerToolTile(Icons.Filled.FitScreen, if (fill) "Fill" else "Fit") { fill = !fill }
       ViewerToolTile(Icons.Filled.ZoomIn, "Zoom +") { scale = (scale + 0.4f).coerceAtMost(3f) }
       ViewerToolTile(Icons.Filled.ZoomOut, "Zoom -") {
         scale = (scale - 0.4f).coerceAtLeast(1f)
         if (scale <= 1.02f) offset = Offset.Zero
       }
       ViewerToolTile(Icons.Filled.RotateRight, "Rotate") { rotationDeg = (rotationDeg + 90f) % 360f }
-      ViewerToolTile(Icons.Filled.FitScreen, "Fit") {
+      ViewerToolTile(Icons.Filled.FitScreen, "Reset") {
+        fill = false
         scale = 1f
         offset = Offset.Zero
         rotationDeg = 0f
@@ -415,15 +431,18 @@ fun PdfViewerPane(
 }
 
 @Composable
-fun TextDocumentViewerPane(
+internal fun TextDocumentViewerPane(
   textContent: String,
+  markdown: Boolean = false,
+  kind: ReaderKind = ReaderKind.TEXT,
   modifier: Modifier = Modifier,
 ) {
   val extra = LocalCloudBoxColors.current
   var showFind by remember { mutableStateOf(false) }
   var findQuery by remember { mutableStateOf("") }
-  var fontScalePercent by remember { mutableIntStateOf(100) }
-  var readerTheme by remember { mutableStateOf(ReaderTheme.LIGHT) }
+  val choice = readerDefault(kind)
+  var fontScalePercent by remember(choice) { mutableIntStateOf(choice.removeSuffix("%").toIntOrNull() ?: 100) }
+  var readerTheme by remember(choice) { mutableStateOf(ReaderTheme.entries.firstOrNull { it.name.equals(choice, true) } ?: ReaderTheme.LIGHT) }
 
   val paperBg =
     when (readerTheme) {
@@ -438,37 +457,40 @@ fun TextDocumentViewerPane(
       ReaderTheme.DARK -> Color(0xFFE5E7F5)
     }
 
-  val matchCount =
-    remember(textContent, findQuery) {
-      val q = findQuery.trim()
-      if (q.isEmpty()) 0
-      else Regex(Regex.escape(q), RegexOption.IGNORE_CASE).findAll(textContent).count()
+  var source by remember(choice) { mutableStateOf(choice == "Source") }
+  val rendered = remember(textContent, markdown, source) {
+    if (markdown && !source) {
+      val parser = org.commonmark.parser.Parser.builder().build()
+      val html = org.commonmark.renderer.html.HtmlRenderer.builder().escapeHtml(true).sanitizeUrls(true).build().render(parser.parse(textContent))
+      androidx.compose.ui.text.AnnotatedString.fromHtml(html)
+    } else androidx.compose.ui.text.AnnotatedString(textContent)
+  }
+  var matchCase by remember { mutableStateOf(false) }
+  var wholeWord by remember { mutableStateOf(false) }
+  val matches = remember(rendered, findQuery, matchCase, wholeWord) {
+    val query = findQuery.trim()
+    val pattern = if (wholeWord) "\\b${Regex.escape(query)}\\b" else Regex.escape(query)
+    val flags = if (matchCase) emptySet() else setOf(RegexOption.IGNORE_CASE)
+    if (query.isEmpty()) emptyList() else Regex(pattern, flags).findAll(rendered.text).map { it.range }.toList()
+  }
+  var current by remember(matches) { mutableIntStateOf(0) }
+  val scroll = rememberScrollState()
+  var layout by remember(rendered) { mutableStateOf<androidx.compose.ui.text.TextLayoutResult?>(null) }
+  LaunchedEffect(current, matches, layout) {
+    val hit = matches.getOrNull(current)
+    val measured = layout
+    if (hit != null && measured != null && hit.first < measured.layoutInput.text.length) {
+      scroll.scrollTo(measured.getLineTop(measured.getLineForOffset(hit.first)).toInt().coerceAtMost(scroll.maxValue))
     }
-
-  val primaryColor = MaterialTheme.colorScheme.primary
-  val annotated =
-    remember(textContent, findQuery, primaryColor) {
-      val q = findQuery.trim()
-      if (q.isEmpty()) {
-        buildAnnotatedString { append(textContent) }
-      } else {
-        buildAnnotatedString {
-          var idx = 0
-          while (idx < textContent.length) {
-            val found = textContent.indexOf(q, startIndex = idx, ignoreCase = true)
-            if (found < 0) {
-              append(textContent.substring(idx))
-              break
-            }
-            append(textContent.substring(idx, found))
-            withStyle(SpanStyle(background = primaryColor.copy(alpha = 0.25f), fontWeight = FontWeight.Bold)) {
-              append(textContent.substring(found, found + q.length))
-            }
-            idx = found + q.length
-          }
-        }
-      }
+  }
+  val matchCount = matches.size
+  val highlight = MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)
+  val annotated = remember(rendered, matches, highlight, current) {
+    buildAnnotatedString {
+      append(rendered)
+      matches.forEachIndexed { i, hit -> addStyle(SpanStyle(background = if (i == current) Color(0xFFFFB74D) else highlight), hit.first, hit.last + 1) }
     }
+  }
 
   Column(modifier = modifier.fillMaxSize()) {
     if (showFind) {
@@ -484,7 +506,11 @@ fun TextDocumentViewerPane(
           trailingIcon = {
             Row(verticalAlignment = Alignment.CenterVertically) {
               if (findQuery.isNotEmpty()) {
-                Text("$matchCount", style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(end = 6.dp))
+                Text(if (matchCount == 0) "0" else "${current + 1}/$matchCount", style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(end = 6.dp))
+              }
+              if (matchCount > 1) {
+                IconButton(onClick = { current = (current + matchCount - 1) % matchCount }) { Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, "Previous occurrence") }
+                IconButton(onClick = { current = (current + 1) % matchCount }) { Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, "Next occurrence") }
               }
               IconButton(onClick = { showFind = false; findQuery = "" }) {
                 Icon(Icons.Filled.Close, contentDescription = "Close find")
@@ -495,6 +521,11 @@ fun TextDocumentViewerPane(
           modifier = Modifier.fillMaxWidth(),
         )
       }
+      Row {
+        androidx.compose.material3.FilterChip(selected = matchCase, onClick = { matchCase = !matchCase }, label = { Text("Match case") })
+        androidx.compose.material3.FilterChip(selected = wholeWord, onClick = { wholeWord = !wholeWord }, label = { Text("Whole word") })
+      }
+
     }
 
     Surface(
@@ -503,9 +534,10 @@ fun TextDocumentViewerPane(
       color = paperBg,
       border = BorderStroke(1.dp, extra.border),
     ) {
-      Box(modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(18.dp)) {
+      Box(modifier = Modifier.fillMaxSize().verticalScroll(scroll).padding(18.dp)) {
         Text(
           text = annotated,
+          onTextLayout = { layout = it },
           style =
             MaterialTheme.typography.bodyLarge.copy(
               fontSize = (15 * fontScalePercent / 100f).sp,
@@ -521,6 +553,7 @@ fun TextDocumentViewerPane(
       modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
       horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
+      if (markdown) ViewerToolTile(Icons.Filled.Search, if (source) "Source" else "Rendered") { source = !source }
       ViewerToolTile(Icons.Filled.Search, "Find", active = showFind) { showFind = !showFind }
       ViewerToolTile(Icons.Filled.ZoomIn, "+") { fontScalePercent = (fontScalePercent + 20).coerceAtMost(180) }
       ViewerToolTile(Icons.Filled.ZoomOut, "-") { fontScalePercent = (fontScalePercent - 20).coerceAtLeast(80) }
@@ -539,11 +572,14 @@ fun TextDocumentViewerPane(
 @Composable
 fun SpreadsheetViewerPane(
   data: SpreadsheetData,
-  onExportCsv: () -> Unit,
+  sheetName: String = "Grid",
   modifier: Modifier = Modifier,
 ) {
   val extra = LocalCloudBoxColors.current
-  var showSummary by remember { mutableStateOf(false) }
+  val sheetView = readerDefault(ReaderKind.SHEETS)
+  var showSummary by remember(sheetView) { mutableStateOf(sheetView == "Summary") }
+  var filter by remember { mutableStateOf("") }
+  var sortColumn by remember { mutableStateOf(false) }
   var selectedRow by remember { mutableIntStateOf(0) }
   var selectedCol by remember { mutableIntStateOf(0) }
 
@@ -551,6 +587,7 @@ fun SpreadsheetViewerPane(
   val colLabel = data.headers.getOrNull(selectedCol) ?: "A"
 
   Column(modifier = modifier.fillMaxSize()) {
+    OutlinedTextField(filter, { filter = it }, singleLine = true, label = { Text("Filter rows") })
     Surface(
       shape = RoundedCornerShape(12.dp),
       color = MaterialTheme.colorScheme.surface,
@@ -586,16 +623,15 @@ fun SpreadsheetViewerPane(
       }
     } else {
       val hScroll = rememberScrollState()
-      val vScroll = rememberScrollState()
       Surface(
         modifier = Modifier.weight(1f).fillMaxWidth(),
         shape = RoundedCornerShape(14.dp),
         color = MaterialTheme.colorScheme.surface,
         border = BorderStroke(1.dp, extra.border),
       ) {
-        Column(modifier = Modifier.verticalScroll(vScroll).horizontalScroll(hScroll)) {
+        androidx.compose.foundation.lazy.LazyColumn(modifier = Modifier.horizontalScroll(hScroll)) {
           // Header Row
-          Row(modifier = Modifier.background(MaterialTheme.colorScheme.surfaceVariant)) {
+          item { Row(modifier = Modifier.background(MaterialTheme.colorScheme.surfaceVariant)) {
             Box(modifier = Modifier.width(42.dp).height(34.dp), contentAlignment = Alignment.Center) {
               Text("", style = MaterialTheme.typography.bodySmall)
             }
@@ -608,8 +644,13 @@ fun SpreadsheetViewerPane(
               }
             }
           }
+          }
           // Data Rows
-          data.rows.forEachIndexed { rIdx, row ->
+          val indices = data.rows.indices.filter { i -> data.rows[i].any { it.contains(filter, ignoreCase = true) } }
+          val order = if (sortColumn) indices.sortedBy { data.rows[it].getOrNull(selectedCol).orEmpty().lowercase() } else indices
+          items(order.size, key = { order[it] }) { displayIndex ->
+            val rIdx = order[displayIndex]
+            val row = data.rows[rIdx]
             Row {
               Box(
                 modifier =
@@ -648,9 +689,10 @@ fun SpreadsheetViewerPane(
 
     Spacer(modifier = Modifier.height(10.dp))
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-      ViewerToolTile(Icons.Filled.PlayArrow, "Sheet1", active = !showSummary) { showSummary = false }
+      ViewerToolTile(Icons.Filled.PlayArrow, sheetName, active = !showSummary) { showSummary = false }
+      ViewerToolTile(Icons.Filled.Search, "Sort $colLabel", active = sortColumn) { sortColumn = !sortColumn }
       ViewerToolTile(Icons.Filled.Speed, "Summary", active = showSummary) { showSummary = true }
-      ViewerToolTile(Icons.Filled.Download, "Export CSV") { onExportCsv() }
+
     }
   }
 }
@@ -676,6 +718,8 @@ fun Media3VideoOrAudioPane(
   mediaFile: File,
   isVideo: Boolean,
   autoplay: Boolean,
+  full: Boolean,
+  toggleFull: () -> Unit,
   modifier: Modifier = Modifier,
 ) {
   val context = LocalContext.current
@@ -696,9 +740,15 @@ fun Media3VideoOrAudioPane(
   var positionMs by remember { mutableIntStateOf(0) }
   var durationMs by remember { mutableIntStateOf(0) }
   var speed by remember { mutableFloatStateOf(1.0f) }
+  var sleepMinutes by remember { mutableIntStateOf(0) }
+  val skip = readerDefault(if (isVideo) ReaderKind.VIDEO else ReaderKind.AUDIO)
+  var skipSeconds by remember(skip) { mutableIntStateOf(skip.substringBefore(" ").toInt()) }
+  LaunchedEffect(player, sleepMinutes) {
+    if (sleepMinutes > 0) { delay(sleepMinutes * 60_000L); player.pause(); sleepMinutes = 0 }
+  }
   var isMuted by remember { mutableStateOf(false) }
   var isLooping by remember { mutableStateOf(false) }
-  var isFullscreen by remember { mutableStateOf(false) }
+
 
   LaunchedEffect(player) {
     while (true) {
@@ -708,31 +758,6 @@ fun Media3VideoOrAudioPane(
       delay(250)
     }
   }
-
-  // Real audio peak samples computed from file bytes
-  val waveformBars =
-    remember(mediaFile, isVideo) {
-      if (isVideo) emptyList()
-      else {
-        val bytes = runCatching { mediaFile.readBytes() }.getOrElse { ByteArray(0) }
-        val barCount = 34
-        if (bytes.isEmpty()) {
-          List(barCount) { 0.35f }
-        } else {
-          val step = (bytes.size / barCount).coerceAtLeast(1)
-          List(barCount) { idx ->
-            val sliceStart = (idx * step).coerceAtMost(bytes.lastIndex)
-            val sliceEnd = ((idx + 1) * step).coerceAtMost(bytes.size)
-            var sum = 0
-            for (i in sliceStart until sliceEnd) {
-              sum += kotlin.math.abs(bytes[i].toInt())
-            }
-            val avg = sum.toFloat() / (sliceEnd - sliceStart).coerceAtLeast(1)
-            (avg / 128f).coerceIn(0.18f, 1f)
-          }
-        }
-      }
-    }
 
   Column(modifier = modifier.fillMaxSize()) {
     if (isVideo) {
@@ -748,7 +773,8 @@ fun Media3VideoOrAudioPane(
           factory = { ctx ->
             PlayerView(ctx).apply {
               this.player = player
-              useController = false
+              useController = true
+              setShowSubtitleButton(true)
             }
           },
           modifier = Modifier.fillMaxSize(),
@@ -784,28 +810,7 @@ fun Media3VideoOrAudioPane(
           Spacer(modifier = Modifier.height(14.dp))
           Text(fileMeta.name, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
           Spacer(modifier = Modifier.height(24.dp))
-          val fraction = if (durationMs > 0) positionMs.toFloat() / durationMs.toFloat() else 0f
-          Row(
-            modifier = Modifier.fillMaxWidth().height(64.dp),
-            horizontalArrangement = Arrangement.spacedBy(4.dp),
-            verticalAlignment = Alignment.CenterVertically,
-          ) {
-            waveformBars.forEachIndexed { idx, amp ->
-              val barFrac = idx.toFloat() / waveformBars.size.toFloat()
-              val active = barFrac <= fraction
-              Box(
-                modifier =
-                  Modifier
-                    .weight(1f)
-                    .height((amp * 58f).dp)
-                    .clip(RoundedCornerShape(3.dp))
-                    .background(
-                      if (active) MaterialTheme.colorScheme.primary
-                      else MaterialTheme.colorScheme.primary.copy(alpha = 0.22f)
-                    ),
-              )
-            }
-          }
+          Text(if (isPlaying) "Playing" else "Paused", style = MaterialTheme.typography.bodyMedium)
         }
       }
     }
@@ -833,8 +838,8 @@ fun Media3VideoOrAudioPane(
       modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
       horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-      ViewerToolTile(Icons.Filled.Replay10, "-10s") {
-        player.seekTo((player.currentPosition - 10_000L).coerceAtLeast(0L))
+      ViewerToolTile(Icons.Filled.Replay10, "-${skipSeconds}s") {
+        player.seekTo((player.currentPosition - skipSeconds * 1000L).coerceAtLeast(0L))
       }
       ViewerToolTile(
         icon = if (isPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow,
@@ -843,8 +848,8 @@ fun Media3VideoOrAudioPane(
       ) {
         if (player.isPlaying) player.pause() else player.play()
       }
-      ViewerToolTile(Icons.Filled.Forward10, "+10s") {
-        player.seekTo(player.currentPosition + 10_000L)
+      ViewerToolTile(Icons.Filled.Forward10, "+${skipSeconds}s") {
+        player.seekTo(player.currentPosition + skipSeconds * 1000L)
       }
       ViewerToolTile(Icons.Filled.Speed, "${speed}x") {
         speed =
@@ -864,9 +869,15 @@ fun Media3VideoOrAudioPane(
         isMuted = !isMuted
         player.volume = if (isMuted) 0f else 1f
       }
+      ViewerToolTile(Icons.Filled.Speed, "Skip ${skipSeconds}s") {
+        skipSeconds = when (skipSeconds) { 10 -> 15; 15 -> 30; else -> 10 }
+      }
+      ViewerToolTile(Icons.Filled.Speed, if (sleepMinutes == 0) "Sleep off" else "Sleep ${sleepMinutes}m") {
+        sleepMinutes = when (sleepMinutes) { 0 -> 15; 15 -> 30; 30 -> 60; else -> 0 }
+      }
       if (isVideo) {
-        ViewerToolTile(Icons.Filled.Fullscreen, "Full", active = isFullscreen) {
-          isFullscreen = !isFullscreen
+        ViewerToolTile(Icons.Filled.Fullscreen, "Full", active = full) {
+          toggleFull()
         }
       }
     }
@@ -968,10 +979,10 @@ fun UnsupportedViewerPane(
     )
     Spacer(modifier = Modifier.height(24.dp))
     Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-      OutlinedButton(onClick = onDownload, modifier = Modifier.height(48.dp), shape = RoundedCornerShape(14.dp)) {
+      if (fileMeta.canDownload) OutlinedButton(onClick = onDownload, modifier = Modifier.height(48.dp), shape = RoundedCornerShape(14.dp)) {
         Text("Download")
       }
-      Button(onClick = onOpenExternal, modifier = Modifier.height(48.dp), shape = RoundedCornerShape(14.dp)) {
+      if (fileMeta.canDownload) Button(onClick = onOpenExternal, modifier = Modifier.height(48.dp), shape = RoundedCornerShape(14.dp)) {
         Text("Open with another app")
       }
     }
@@ -1013,7 +1024,7 @@ private fun formatMediaMs(ms: Int): String {
   return "$mins:${secs.toString().padStart(2, '0')}"
 }
 
-private fun printPdfFile(context: Context, pdfFile: File, jobName: String) {
+internal fun printPdfFile(context: Context, pdfFile: File, jobName: String) {
   val printManager = context.getSystemService(Context.PRINT_SERVICE) as? PrintManager ?: return
   val adapter =
     object : PrintDocumentAdapter() {

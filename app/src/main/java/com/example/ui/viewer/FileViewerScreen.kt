@@ -1,5 +1,9 @@
 package com.example.ui.viewer
 
+import androidx.compose.runtime.setValue
+import androidx.compose.material.icons.filled.Fullscreen
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Search
 import android.app.Activity
 import android.content.Intent
 import android.view.WindowManager
@@ -56,13 +60,13 @@ import kotlinx.coroutines.launch
 @Composable
 fun FileViewerScreen(
   file: CloudFile,
-  siblingImages: List<CloudFile>,
+  siblings: List<CloudFile>,
   repository: FileRepository,
   isOnline: Boolean,
   autoplayMedia: Boolean,
   keepScreenOn: Boolean,
   onBack: () -> Unit,
-  onSelectSiblingImage: (CloudFile) -> Unit,
+  onSelectSibling: (CloudFile) -> Unit,
   onOpenMoreActions: (CloudFile) -> Unit,
   onDownload: (CloudFile) -> Unit,
   onShare: (CloudFile) -> Unit,
@@ -74,7 +78,7 @@ fun FileViewerScreen(
   val context = LocalContext.current
   val extra = LocalCloudBoxColors.current
   val scope = rememberCoroutineScope()
-  val loader = remember(repository) { ViewerContentLoader(repository) }
+  val loader = remember(repository, file.id) { ViewerContentLoader(repository) }
   val state by loader.state.collectAsStateWithLifecycle()
   val pdfBookmarks by loader.observePdfBookmarks(file.id).collectAsStateWithLifecycle(initialValue = emptyList())
 
@@ -90,12 +94,28 @@ fun FileViewerScreen(
     loader.loadFile(file, isOnline)
   }
 
+  var showDefaults by remember(file.id) { androidx.compose.runtime.mutableStateOf(false) }
+  val kind = ReaderKind.forFile(file)
+  var browseFolder by remember(file.id) { androidx.compose.runtime.mutableStateOf(false) }
+  if (browseFolder) FolderMediaDialog(file, siblings, onSelectSibling) { browseFolder = false }
+  if (showDefaults) ViewerDefaultsDialog(kind) { showDefaults = false }
+  var full by androidx.compose.runtime.saveable.rememberSaveable(file.id) { androidx.compose.runtime.mutableStateOf(false) }
+  androidx.activity.compose.BackHandler(enabled = full) { full = false }
+  DisposableEffect(full) {
+    val window = (context as? Activity)?.window
+    val controller = window?.let { androidx.core.view.WindowCompat.getInsetsController(it, it.decorView) }
+    if (full) controller?.hide(androidx.core.view.WindowInsetsCompat.Type.systemBars())
+    onDispose { if (full) controller?.show(androidx.core.view.WindowInsetsCompat.Type.systemBars()) }
+  }
   // If this is a PDF, launch the full-screen immersive PDF reader with no bottom clutter
   if (state is ViewerContentState.PdfFile) {
     val s = state as ViewerContentState.PdfFile
     AdvancedPdfViewerPane(
       fileMeta = file,
       pdfFile = s.file,
+      immersive = full,
+      onSettings = { showDefaults = true },
+      toggleImmersive = { full = !full },
       bookmarkedPages = pdfBookmarks,
       onToggleBookmark = { pageIdx ->
         scope.launch { loader.togglePdfBookmark(file.id, pageIdx) }
@@ -109,7 +129,7 @@ fun FileViewerScreen(
 
   Column(modifier = Modifier.fillMaxSize().padding(horizontal = 14.dp, vertical = 10.dp).testTag("file_viewer_screen")) {
     // Top bar
-    Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+    if (!full) Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
       IconButton(onClick = onBack, modifier = Modifier.size(48.dp).testTag("viewer_back_button")) {
         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
       }
@@ -121,11 +141,13 @@ fun FileViewerScreen(
           overflow = TextOverflow.Ellipsis,
         )
         Text(
-          text = "${file.category.label} · ${FormatUtils.formatBytes(file.sizeBytes)}",
+          text = "${kind.label} · ${FormatUtils.formatBytes(file.sizeBytes)} · ${file.userRole.label}",
           style = MaterialTheme.typography.bodySmall,
           color = extra.textSecondary,
         )
       }
+      IconButton(onClick = { showDefaults = true }) { Icon(Icons.Filled.Settings, "Viewer settings") }
+      IconButton(onClick = { full = true }) { Icon(androidx.compose.material.icons.Icons.Filled.Fullscreen, "Full screen") }
       IconButton(onClick = { onOpenMoreActions(file) }, modifier = Modifier.size(48.dp)) {
         Icon(Icons.Filled.MoreVert, contentDescription = "More actions")
       }
@@ -155,13 +177,13 @@ fun FileViewerScreen(
           }
         }
         is ViewerContentState.ImageFile -> {
-          val imgIndex = siblingImages.indexOfFirst { it.id == file.id }
+          val imgIndex = siblings.indexOfFirst { it.id == file.id }
           ImageViewerPane(
             imageFile = s.file,
             canSwipePrev = imgIndex > 0,
-            canSwipeNext = imgIndex in 0 until siblingImages.lastIndex,
-            onSwipePrev = { if (imgIndex > 0) onSelectSiblingImage(siblingImages[imgIndex - 1]) },
-            onSwipeNext = { if (imgIndex in 0 until siblingImages.lastIndex) onSelectSiblingImage(siblingImages[imgIndex + 1]) },
+            canSwipeNext = imgIndex in 0 until siblings.lastIndex,
+            onSwipePrev = { if (imgIndex > 0) onSelectSibling(siblings[imgIndex - 1]) },
+            onSwipeNext = { if (imgIndex in 0 until siblings.lastIndex) onSelectSibling(siblings[imgIndex + 1]) },
           )
         }
         is ViewerContentState.PdfFile -> {
@@ -175,13 +197,14 @@ fun FileViewerScreen(
           )
         }
         is ViewerContentState.TextFile -> {
-          TextDocumentViewerPane(textContent = s.text)
+          TextDocumentViewerPane(textContent = s.text, kind = kind, markdown = file.name.substringAfterLast('.').lowercase() in setOf("md", "markdown"))
         }
-        is ViewerContentState.Spreadsheet -> {
-          SpreadsheetViewerPane(
-            data = s.data,
-            onExportCsv = { onDownload(file) },
-          )
+        is ViewerContentState.Spreadsheet -> SpreadsheetViewerPane(s.data)
+        is ViewerContentState.Slides -> SectionReader(s.pages.mapIndexed { i, _ -> "Slide ${i + 1}" }) { i ->
+          TextDocumentViewerPane(s.pages[i], kind = ReaderKind.SLIDES)
+        }
+        is ViewerContentState.Workbook -> SectionReader(s.sheets.map { it.first }) { i ->
+          SpreadsheetViewerPane(s.sheets[i].second, sheetName = s.sheets[i].first)
         }
         is ViewerContentState.VideoOrAudio -> {
           Media3VideoOrAudioPane(
@@ -189,6 +212,8 @@ fun FileViewerScreen(
             mediaFile = s.localFile,
             isVideo = file.category == FileCategory.VIDEO,
             autoplay = autoplayMedia,
+            full = full,
+            toggleFull = { full = !full },
           )
         }
         is ViewerContentState.Archive -> {
@@ -221,12 +246,20 @@ fun FileViewerScreen(
 
     Spacer(modifier = Modifier.height(10.dp))
 
+    if (full) androidx.compose.material3.TextButton(onClick = { full = false }) { Text("Exit full screen") }
     // Persistent Bottom Action Strip
-    Row(
+    if (!full) Row(
       modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
       horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-      ViewerToolTile(Icons.Filled.Download, "Download") { onDownload(file) }
+      if (kind in listOf(ReaderKind.IMAGE, ReaderKind.AUDIO, ReaderKind.VIDEO)) ViewerToolTile(Icons.Filled.Search, "Folder") { browseFolder = true }
+      if (file.canDownload) ViewerToolTile(Icons.Filled.Download, "Download") { onDownload(file) }
+      if (file.isGoogleWorkspaceDoc && file.webViewLink?.startsWith("https://") == true) {
+        ViewerToolTile(Icons.Filled.Fullscreen, "Open in Google") {
+          try { context.startActivity(Intent(Intent.ACTION_VIEW, android.net.Uri.parse(file.webViewLink))) }
+          catch (_: android.content.ActivityNotFoundException) { onShowToast("No app available to open the Google link") }
+        }
+      }
       if (file.canShare) {
         ViewerToolTile(Icons.Filled.Share, "Share") { onShare(file) }
       }
@@ -236,7 +269,7 @@ fun FileViewerScreen(
         active = file.starred,
       ) { onToggleStar(file) }
       val isOffline = file.offlineStatus == OfflineSyncStatus.SAVED
-      ViewerToolTile(
+      if (file.canDownload) ViewerToolTile(
         icon = Icons.Filled.OfflinePin,
         label = if (isOffline) "Saved" else "Offline",
         active = isOffline,
@@ -266,5 +299,20 @@ private fun openWithExternalApp(
     context.startActivity(Intent.createChooser(intent, "Open with"))
   } catch (e: Exception) {
     onError("No installed app can open this file type")
+  }
+}
+
+
+@Composable
+private fun SectionReader(names: List<String>, content: @Composable (Int) -> Unit) {
+  var index by androidx.compose.runtime.remember(names) { androidx.compose.runtime.mutableIntStateOf(0) }
+  if (names.isEmpty()) { Text("No content in this file"); return }
+  Column {
+    Row(modifier = Modifier.horizontalScroll(rememberScrollState())) {
+      names.forEachIndexed { i, name ->
+        androidx.compose.material3.FilterChip(selected = i == index, onClick = { index = i }, label = { Text(name) })
+      }
+    }
+    androidx.compose.runtime.key(index) { content(index) }
   }
 }
