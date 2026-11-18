@@ -25,6 +25,7 @@ CLOUDBOX_PROJECT_AND_WEBSITE_GUIDE.md
 
 # Firebase & Android Secrets
 app/google-services.json
+google-services.json
 
 # Binaries & APKs
 app/build/outputs/
