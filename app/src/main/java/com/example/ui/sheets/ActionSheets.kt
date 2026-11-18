@@ -707,17 +707,18 @@ fun ShareAndPermissionsSheet(
   isOnline: Boolean,
   onDismiss: () -> Unit,
   onInvite: (emails: List<String>, role: AccessRole) -> Unit,
-  onChangeRole: (permissionId: String, role: AccessRole, inheritedParentId: String?) -> Unit,
-  onRemovePermission: (permissionId: String, inheritedParentId: String?) -> Unit,
+  onChangeRole: (permissionId: String, role: AccessRole) -> Unit,
+  onOpenFolderSharing: (String) -> Unit,
+  onRemovePermission: (permissionId: String) -> Unit,
   onSetAnyoneLink: (enabled: Boolean, role: AccessRole) -> Unit,
   onCopyLink: (String) -> Unit,
   onRetryLoad: () -> Unit,
 ) {
   val extra = LocalCloudBoxColors.current
-  var emailInput by remember { mutableStateOf("") }
-  var inviteRole by remember { mutableStateOf(AccessRole.VIEWER) }
+  var emailInput by remember(file.id) { mutableStateOf("") }
+  var inviteRole by remember(file.id) { mutableStateOf(AccessRole.VIEWER) }
   var showInviteRoleMenu by remember { mutableStateOf(false) }
-  val canManageSharing = isOnline && (file.canShare || file.ownedByMe)
+  val canManageSharing = isOnline && file.ownedByMe
 
   ModalBottomSheet(
     onDismissRequest = onDismiss,
@@ -749,7 +750,7 @@ fun ShareAndPermissionsSheet(
         ) {
           Text(
             if (!isOnline) "You are currently offline. Connect to the internet to change permissions."
-            else "Only the owner or an editor can change who has access.",
+            else "Only the owner can change who has access.",
             style = MaterialTheme.typography.bodySmall,
             modifier = Modifier.padding(12.dp),
           )
@@ -841,7 +842,7 @@ fun ShareAndPermissionsSheet(
           val userPerms = perms.filter { it.type != "anyone" }
           val anyonePerm = perms.firstOrNull { it.type == "anyone" }
 
-          if (userPerms.isEmpty() && currentUser != null) {
+          if (userPerms.isEmpty() && file.ownedByMe && currentUser != null) {
             PermissionPersonRow(
               name = "${currentUser.displayName} (you)",
               email = currentUser.email,
@@ -869,14 +870,19 @@ fun ShareAndPermissionsSheet(
                 role = perm.role,
                 isOwner = isItemOwner,
                 isInherited = perm.isInherited,
-                canModify = canManageSharing && !isItemOwner && !isBusy,
-                onChangeRole = { newRole -> onChangeRole(perm.id, newRole, perm.inheritedFrom) },
-                onRemove = { onRemovePermission(perm.id, perm.inheritedFrom) },
+                canModify = canManageSharing && !isItemOwner && !perm.isInherited && !isBusy,
+                onChangeRole = { newRole -> onChangeRole(perm.id, newRole) },
+                onRemove = { onRemovePermission(perm.id) },
               )
             }
           }
 
           Spacer(modifier = Modifier.height(16.dp))
+          file.parentId?.takeUnless { it == "root" }?.let { folderId ->
+            TextButton(onClick = { onOpenFolderSharing(folderId) }, enabled = !isBusy && isOnline) {
+              Text("Open parent folder sharing")
+            }
+          }
           Text("GENERAL ACCESS", style = MaterialTheme.typography.labelSmall, color = extra.textSecondary)
           Spacer(modifier = Modifier.height(8.dp))
 
@@ -903,7 +909,8 @@ fun ShareAndPermissionsSheet(
                   )
                   Text(
                     text =
-                      if (anyonePerm != null) "Anyone on the internet with this link can ${anyonePerm.role.label.lowercase()}"
+                      if (anyonePerm?.isInherited == true) "Manage link access in the sharing folder"
+                      else if (anyonePerm != null) "Anyone on the internet with this link can ${anyonePerm.role.label.lowercase()}"
                       else "Only people with access can open",
                     style = MaterialTheme.typography.bodySmall,
                     color = extra.textSecondary,
@@ -911,7 +918,7 @@ fun ShareAndPermissionsSheet(
                 }
                 Switch(
                   checked = anyonePerm != null,
-                  enabled = canManageSharing && !isBusy,
+                  enabled = anyonePerm?.isInherited != true && canManageSharing && !isBusy,
                   onCheckedChange = { enabled ->
                     onSetAnyoneLink(enabled, anyonePerm?.role ?: AccessRole.VIEWER)
                   },
@@ -936,7 +943,7 @@ fun ShareAndPermissionsSheet(
                   Box {
                     OutlinedButton(
                       onClick = { showLinkRoleMenu = true },
-                      enabled = canManageSharing && !isBusy,
+                      enabled = !anyonePerm.isInherited && canManageSharing && !isBusy,
                       shape = RoundedCornerShape(10.dp),
                       contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
                       modifier = Modifier.height(36.dp),
@@ -1021,7 +1028,7 @@ private fun PermissionPersonRow(
       }
       if (isInherited) {
         Text(
-          "Inherited from folder",
+          "Manage this access in the sharing folder",
           style = MaterialTheme.typography.labelSmall,
           color = MaterialTheme.colorScheme.tertiary,
         )

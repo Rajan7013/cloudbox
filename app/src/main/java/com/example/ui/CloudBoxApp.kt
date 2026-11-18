@@ -826,11 +826,21 @@ private fun CloudBoxWorkspace(
       isOnline = networkStatus.isOnline,
       onDismiss = { shareSheetFile = null },
       onInvite = { emails, role -> viewModel.inviteEmails(file.id, emails, role) },
-      onChangeRole = { permId, role, inheritedParentId ->
-        viewModel.changePermissionRole(file.id, permId, role, inheritedParentId ?: file.parentId)
+      onChangeRole = { permId, role ->
+        viewModel.changePermissionRole(file.id, permId, role)
       },
-      onRemovePermission = { permId, inheritedParentId ->
-        viewModel.removePermission(file.id, permId, inheritedParentId ?: file.parentId)
+      onOpenFolderSharing = { folderId ->
+        scope.launch {
+          try {
+            val folder = viewModel.repository.getFileDetails(folderId)
+            if (shareSheetFile?.id == file.id) openShareSheet(folder)
+          } catch (e: Exception) {
+            android.widget.Toast.makeText(context, "Could not open folder sharing", android.widget.Toast.LENGTH_SHORT).show()
+          }
+        }
+      },
+      onRemovePermission = { permId ->
+        viewModel.removePermission(file.id, permId)
       },
       onSetAnyoneLink = { enabled, role -> viewModel.setAnyoneLinkAccess(file.id, enabled, role) },
       onCopyLink = { copyLinkToClipboard(it) },

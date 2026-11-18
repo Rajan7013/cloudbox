@@ -46,7 +46,6 @@ import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.withContext
 import retrofit2.HttpException
-import retrofit2.Response
 
 class DriveFileRepository(
   private val context: Context,
@@ -530,6 +529,7 @@ class DriveFileRepository(
     withContext(Dispatchers.IO) {
       val uid = currentUid()
       val offline = offlineDao.getByFileId(uid, fileId)
+      requireOwner(fileId)
       val dto = executeDriveCall {
         api.updateFileMetadata(fileId, DriveUpdateMetadataRequest(trashed = trashed))
       }
@@ -541,6 +541,7 @@ class DriveFileRepository(
   override suspend fun deletePermanently(fileId: String) =
     withContext(Dispatchers.IO) {
       val uid = currentUid()
+      requireOwner(fileId)
       executeDriveCall {
         val resp = api.deleteFilePermanently(fileId)
         if (!resp.isSuccessful) throw HttpException(resp)
@@ -561,12 +562,21 @@ class DriveFileRepository(
 
   override suspend fun listPermissions(fileId: String): List<SharePermission> =
     withContext(Dispatchers.IO) {
-      val resp = executeDriveCall { api.listPermissions(fileId) }
-      resp.permissions.map { it.toSharePermission() }
+      val permissions = mutableListOf<SharePermission>()
+      var token: String? = null
+      do {
+        val page = executeDriveCall { api.listPermissions(fileId, pageToken = token) }
+        permissions.addAll(page.permissions.map { it.toSharePermission() })
+        token = page.nextPageToken
+      } while (token != null)
+      permissions
     }
 
   override suspend fun inviteCollaborator(fileId: String, email: String, role: AccessRole): SharePermission =
     withContext(Dispatchers.IO) {
+      require(role != AccessRole.OWNER)
+      requireOwner(fileId)
+      restrictEditorSharing(fileId)
       val dto = executeDriveCall {
         api.createPermission(
           fileId = fileId,
@@ -581,109 +591,44 @@ class DriveFileRepository(
       dto.toSharePermission()
     }
 
+  private suspend fun restrictEditorSharing(fileId: String) {
+    executeDriveCall {
+      api.updateFileMetadata(fileId, DriveUpdateMetadataRequest(writersCanShare = false), fields = "id")
+    }
+  }
+
+  private suspend fun requireOwner(fileId: String) {
+    val metadata = executeDriveCall { api.getFileMetadata(fileId, fields = "id,ownedByMe") }
+    check(metadata.ownedByMe == true) { "Only the owner can perform this action." }
+  }
+
+  private suspend fun requireEditablePermission(fileId: String, permissionId: String) {
+    requireOwner(fileId)
+    val permission = listPermissions(fileId).firstOrNull { it.id == permissionId }
+    checkNotNull(permission) { "This permission no longer exists. Reopen sharing to refresh." }
+    check(permission.role != AccessRole.OWNER) { "The owner's access is permanent." }
+    check(!permission.isInherited) { "Manage inherited access in the folder where it was granted." }
+  }
+
   override suspend fun updatePermissionRole(
     fileId: String,
     permissionId: String,
     role: AccessRole,
-    parentId: String?,
-  ): SharePermission =
+  ): SharePermission = withContext(Dispatchers.IO) {
+    require(role != AccessRole.OWNER)
+    requireEditablePermission(fileId, permissionId)
+    if (role == AccessRole.EDITOR) restrictEditorSharing(fileId)
+    executeDriveCall {
+      api.updatePermission(fileId, permissionId, DriveUpdatePermissionRequest(role.apiRole))
+    }.toSharePermission()
+  }
+
+  override suspend fun removePermission(fileId: String, permissionId: String) {
     withContext(Dispatchers.IO) {
-      val trimmedId = permissionId.trim()
-      suspend fun tryPatch(targetId: String): DrivePermissionDto {
-        return try {
-          api.updatePermission(
-            fileId = targetId,
-            permissionId = trimmedId,
-            body = DriveUpdatePermissionRequest(role = role.apiRole),
-            supportsAllDrives = true,
-          )
-        } catch (_: Exception) {
-          api.updatePermissionDirect(
-            fileId = targetId,
-            permissionId = trimmedId,
-            body = DriveUpdatePermissionRequest(role = role.apiRole),
-          )
-        }
-      }
-
-      val dto = executeDriveCall {
-        try {
-          tryPatch(fileId)
-        } catch (e: Exception) {
-          val errorText = when (e) {
-            is HttpException -> {
-              val raw = try { e.response()?.errorBody()?.string() } catch (_: Exception) { null }
-              clientProvider.parseErrorMessage(raw) ?: e.message()
-            }
-            is DriveApiException -> e.message.orEmpty()
-            else -> e.localizedMessage.orEmpty()
-          }
-
-          val isInherited = errorText.contains("inherited", ignoreCase = true) ||
-            errorText.contains("limited access", ignoreCase = true) ||
-            errorText.contains("cannot delete the permission", ignoreCase = true) ||
-            errorText.contains("cannot modify the permission", ignoreCase = true)
-
-          if (isInherited && !parentId.isNullOrBlank() && parentId != "root") {
-            try {
-              return@executeDriveCall tryPatch(parentId)
-            } catch (parentEx: Exception) {
-              Log.w("DriveRepo", "Cascade updatePermission to parent $parentId failed", parentEx)
-            }
-          }
-
-          if (isInherited) {
-            throw DriveApiException(
-              400,
-              "This person's access is inherited from the parent folder. Please open the parent folder to change their role."
-            )
-          }
-          throw e
-        }
-      }
-      dto.toSharePermission()
-    }
-
-  override suspend fun removePermission(
-    fileId: String,
-    permissionId: String,
-    parentId: String?,
-  ) {
-    withContext(Dispatchers.IO) {
-      val trimmedId = permissionId.trim()
+      requireEditablePermission(fileId, permissionId)
       executeDriveCall {
-        suspend fun tryDelete(targetId: String): Response<Unit> {
-          val r = try {
-            api.deletePermission(targetId, trimmedId, supportsAllDrives = true)
-          } catch (_: Exception) { null }
-          if (r != null && r.isSuccessful) return r
-          return api.deletePermissionDirect(targetId, trimmedId)
-        }
-
-        val resp = tryDelete(fileId)
-        if (!resp.isSuccessful) {
-          val raw = resp.errorBody()?.string()
-          val msg = clientProvider.parseErrorMessage(raw) ?: DriveClientProvider.friendlyMessageForCode(resp.code())
-
-          val isInherited = msg.contains("inherited", ignoreCase = true) ||
-            msg.contains("limited access", ignoreCase = true) ||
-            msg.contains("cannot delete the permission", ignoreCase = true)
-
-          // If permission is inherited from parent folder, cascade delete to parent folder
-          if (isInherited && !parentId.isNullOrBlank() && parentId != "root") {
-            val parentResp = tryDelete(parentId)
-            if (parentResp.isSuccessful) return@executeDriveCall
-          }
-
-          if (isInherited) {
-            throw DriveApiException(
-              resp.code(),
-              "This person's access is inherited from the parent folder. To remove them, open the parent folder and remove access there."
-            )
-          }
-
-          throw DriveApiException(resp.code(), msg)
-        }
+        val response = api.deletePermission(fileId, permissionId)
+        if (!response.isSuccessful) throw HttpException(response)
       }
     }
   }
@@ -694,10 +639,13 @@ class DriveFileRepository(
     role: AccessRole,
   ): List<SharePermission> =
     withContext(Dispatchers.IO) {
+      require(role != AccessRole.OWNER)
+      requireOwner(fileId)
       val current = listPermissions(fileId)
       val existingAnyone = current.firstOrNull { it.type == "anyone" }
       if (enabled) {
         if (existingAnyone == null) {
+          restrictEditorSharing(fileId)
           executeDriveCall {
             api.createPermission(
               fileId = fileId,
@@ -1070,7 +1018,7 @@ class DriveFileRepository(
       photoLink = photoLink,
       allowFileDiscovery = allowFileDiscovery ?: false,
       expirationTime = expirationTime,
-      isInherited = inheritedDetail != null,
+      isInherited = inheritedDetail != null && permissionDetails.orEmpty().none { it.inherited == false },
       inheritedFrom = inheritedDetail?.inheritedFrom,
     )
   }

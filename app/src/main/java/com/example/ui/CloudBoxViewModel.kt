@@ -1121,13 +1121,17 @@ class CloudBoxViewModel(application: Application) : AndroidViewModel(application
     }
   }
 
+  private var permissionsJob: Job? = null
+
   fun loadPermissions(fileId: String) {
-    viewModelScope.launch {
+    permissionsJob?.cancel()
+    permissionsJob = viewModelScope.launch {
       _permissionsState.value = ScreenDataState.Loading
       try {
         val perms = repository.listPermissions(fileId)
         _permissionsState.value = ScreenDataState.Success(perms)
       } catch (e: Exception) {
+        if (e is kotlinx.coroutines.CancellationException) throw e
         _permissionsState.value = toErrorState(e)
       }
     }
@@ -1158,7 +1162,7 @@ class CloudBoxViewModel(application: Application) : AndroidViewModel(application
     }
   }
 
-  fun changePermissionRole(fileId: String, permissionId: String, role: AccessRole, parentId: String? = null) {
+  fun changePermissionRole(fileId: String, permissionId: String, role: AccessRole) {
     viewModelScope.launch {
       _isShareBusy.value = true
       val previousList = (_permissionsState.value as? ScreenDataState.Success)?.data
@@ -1168,7 +1172,7 @@ class CloudBoxViewModel(application: Application) : AndroidViewModel(application
         )
       }
       try {
-        repository.updatePermissionRole(fileId, permissionId, role, parentId)
+        repository.updatePermissionRole(fileId, permissionId, role)
         loadPermissions(fileId)
         loadShared()
         emitToast("Role updated to ${role.label}")
@@ -1184,7 +1188,7 @@ class CloudBoxViewModel(application: Application) : AndroidViewModel(application
     }
   }
 
-  fun removePermission(fileId: String, permissionId: String, parentId: String? = null) {
+  fun removePermission(fileId: String, permissionId: String) {
     viewModelScope.launch {
       _isShareBusy.value = true
       val previousList = (_permissionsState.value as? ScreenDataState.Success)?.data
@@ -1192,10 +1196,10 @@ class CloudBoxViewModel(application: Application) : AndroidViewModel(application
         _permissionsState.value = ScreenDataState.Success(previousList.filter { it.id != permissionId })
       }
       try {
-        repository.removePermission(fileId, permissionId, parentId)
+        repository.removePermission(fileId, permissionId)
         loadPermissions(fileId)
         loadShared()
-        emitToast("Access removed")
+        emitToast("Direct permission removed")
       } catch (e: Exception) {
         if (previousList != null) {
           _permissionsState.value = ScreenDataState.Success(previousList)

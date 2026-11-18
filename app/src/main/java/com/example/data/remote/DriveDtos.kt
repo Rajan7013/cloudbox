@@ -76,6 +76,7 @@ data class DriveCapabilitiesDto(
 
 @JsonClass(generateAdapter = true)
 data class DrivePermissionListResponse(
+  val nextPageToken: String? = null,
   val permissions: List<DrivePermissionDto> = emptyList(),
 )
 
@@ -109,6 +110,7 @@ data class DriveCreateFolderRequest(
 
 @JsonClass(generateAdapter = true)
 data class DriveUpdateMetadataRequest(
+  val writersCanShare: Boolean? = null,
   val name: String? = null,
   val starred: Boolean? = null,
   val trashed: Boolean? = null,

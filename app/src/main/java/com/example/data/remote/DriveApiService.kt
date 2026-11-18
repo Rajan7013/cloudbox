@@ -84,7 +84,8 @@ interface DriveApiService {
   suspend fun listPermissions(
     @Path("fileId") fileId: String,
     @Query("supportsAllDrives") supportsAllDrives: Boolean = true,
-    @Query("fields") fields: String = "permissions(id,type,role,displayName,emailAddress,photoLink,allowFileDiscovery,expirationTime,permissionDetails)",
+    @Query("pageToken") pageToken: String? = null,
+    @Query("fields") fields: String = "nextPageToken,permissions(id,type,role,displayName,emailAddress,photoLink,allowFileDiscovery,expirationTime,permissionDetails)",
   ): DrivePermissionListResponse
 
   @POST("drive/v3/files/{fileId}/permissions")
