@@ -27,5 +27,5 @@ CLOUDBOX_PROJECT_AND_WEBSITE_GUIDE.md
 app/google-services.json
 
 # Binaries & APKs
-*.apk
-website/downloads/*.apk
+app/build/outputs/
+website/downloads/cloudbox-release.apk
