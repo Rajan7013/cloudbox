@@ -45,6 +45,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -137,7 +138,12 @@ fun OfflineFilesScreen(
               FileTypeTile(category = file.category, thumbnailLink = file.thumbnailLink, imageLoader = imageLoader, size = 44.dp)
               Spacer(modifier = Modifier.width(12.dp))
               Column(modifier = Modifier.weight(1f)) {
-                Text(FormatUtils.middleEllipsis(file.name, 28), style = MaterialTheme.typography.labelLarge)
+                Text(
+                  text = file.name,
+                  style = MaterialTheme.typography.labelLarge,
+                  maxLines = 2,
+                  overflow = TextOverflow.Ellipsis,
+                )
                 val statusColor =
                   when (file.offlineStatus) {
                     OfflineSyncStatus.SAVED -> extra.success
@@ -230,7 +236,12 @@ fun TrashScreen(
                   FileTypeTile(category = file.category, thumbnailLink = file.thumbnailLink, imageLoader = imageLoader, size = 44.dp)
                   Spacer(modifier = Modifier.width(12.dp))
                   Column(modifier = Modifier.weight(1f)) {
-                    Text(FormatUtils.middleEllipsis(file.name, 26), style = MaterialTheme.typography.labelLarge)
+                    Text(
+                      text = file.name,
+                      style = MaterialTheme.typography.labelLarge,
+                      maxLines = 2,
+                      overflow = TextOverflow.Ellipsis,
+                    )
                     Text("$daysLeft days left · ${FormatUtils.formatBytes(file.sizeBytes)}", style = MaterialTheme.typography.bodySmall, color = extra.textSecondary)
                   }
                   OutlinedButton(

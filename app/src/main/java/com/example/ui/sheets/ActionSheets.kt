@@ -69,6 +69,7 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -634,7 +635,13 @@ fun MoveToFolderDialog(
   val canMoveToRoot = file.parentId != "root"
   AlertDialog(
     onDismissRequest = onDismiss,
-    title = { Text("Move “${FormatUtils.middleEllipsis(file.name, 20)}”") },
+    title = {
+      Text(
+        text = "Move “${file.name}”",
+        maxLines = 2,
+        overflow = TextOverflow.Ellipsis,
+      )
+    },
     text = {
       Column(modifier = Modifier.fillMaxWidth().heightIn(max = 320.dp).verticalScroll(rememberScrollState())) {
         if (canMoveToRoot) {
@@ -726,7 +733,12 @@ fun ShareAndPermissionsSheet(
           .padding(horizontal = 20.dp)
           .padding(bottom = 28.dp),
     ) {
-      Text("Share “${FormatUtils.middleEllipsis(file.name, 22)}”", style = MaterialTheme.typography.headlineSmall)
+      Text(
+        text = "Share “${file.name}”",
+        style = MaterialTheme.typography.headlineSmall,
+        maxLines = 2,
+        overflow = TextOverflow.Ellipsis,
+      )
       Spacer(modifier = Modifier.height(14.dp))
 
       if (!canManageSharing) {

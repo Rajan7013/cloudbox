@@ -90,6 +90,23 @@ fun FileViewerScreen(
     loader.loadFile(file, isOnline)
   }
 
+  // If this is a PDF, launch the full-screen immersive PDF reader with no bottom clutter
+  if (state is ViewerContentState.PdfFile) {
+    val s = state as ViewerContentState.PdfFile
+    AdvancedPdfViewerPane(
+      fileMeta = file,
+      pdfFile = s.file,
+      bookmarkedPages = pdfBookmarks,
+      onToggleBookmark = { pageIdx ->
+        scope.launch { loader.togglePdfBookmark(file.id, pageIdx) }
+      },
+      onBack = onBack,
+      onOpenMoreActions = { onOpenMoreActions(file) },
+      modifier = Modifier.fillMaxSize().testTag("file_viewer_screen"),
+    )
+    return
+  }
+
   Column(modifier = Modifier.fillMaxSize().padding(horizontal = 14.dp, vertical = 10.dp).testTag("file_viewer_screen")) {
     // Top bar
     Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
@@ -98,9 +115,9 @@ fun FileViewerScreen(
       }
       Column(modifier = Modifier.weight(1f)) {
         Text(
-          text = FormatUtils.middleEllipsis(file.name, 26),
+          text = file.name,
           style = MaterialTheme.typography.titleMedium,
-          maxLines = 1,
+          maxLines = 2,
           overflow = TextOverflow.Ellipsis,
         )
         Text(

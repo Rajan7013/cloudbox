@@ -23,16 +23,16 @@ object FormatUtils {
     }
   }
 
-  fun middleEllipsis(name: String, maxChars: Int = 26): String {
+  fun middleEllipsis(name: String, maxChars: Int = 45): String {
     if (name.length <= maxChars || maxChars < 8) return name
     val dotIndex = name.lastIndexOf('.')
-    val ext = if (dotIndex in 1 until name.length - 1 && name.length - dotIndex <= 7) {
+    val ext = if (dotIndex in 1 until name.length - 1 && name.length - dotIndex <= 8) {
       name.substring(dotIndex)
     } else {
       ""
     }
-    val tailKeep = (ext.length + 3).coerceAtMost(maxChars / 2)
-    val headKeep = (maxChars - tailKeep - 1).coerceAtLeast(3)
+    val tailKeep = (ext.length + 4).coerceAtMost(maxChars / 2)
+    val headKeep = (maxChars - tailKeep - 1).coerceAtLeast(4)
     return "${name.take(headKeep)}…${name.takeLast(tailKeep)}"
   }
 

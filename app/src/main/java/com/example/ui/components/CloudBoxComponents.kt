@@ -237,10 +237,10 @@ fun FileGridCard(
       Spacer(modifier = Modifier.height(10.dp))
 
       Text(
-        text = FormatUtils.middleEllipsis(file.name, maxChars = 22),
+        text = file.name,
         style = MaterialTheme.typography.labelLarge,
         color = MaterialTheme.colorScheme.onSurface,
-        maxLines = 1,
+        maxLines = 2,
         overflow = TextOverflow.Ellipsis,
       )
 
@@ -365,10 +365,10 @@ fun FileListRow(
       Column(modifier = Modifier.weight(1f)) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
           Text(
-            text = FormatUtils.middleEllipsis(file.name, maxChars = 32),
+            text = file.name,
             style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold),
             color = MaterialTheme.colorScheme.onSurface,
-            maxLines = 1,
+            maxLines = 2,
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier.weight(1f, fill = false),
           )
