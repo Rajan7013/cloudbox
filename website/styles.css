@@ -8,9 +8,8 @@
 .guide,.reading{display:grid;grid-template-columns:.85fr 1.25fr;gap:64px;padding-block:clamp(52px,7vw,92px)}details{border-bottom:1px solid var(--line);padding:17px 0}summary{cursor:pointer;font-weight:650;font-size:1.08rem}details p{margin-top:12px}.foot{border-top:1px solid var(--line);padding-block:28px;gap:20px}.foot .brand{font-size:1.25rem}.foot>div{gap:20px;flex-wrap:wrap}.legalhead{background:radial-gradient(ellipse at 95% 100%,#dcd5f4,transparent 55%),var(--pale);padding-block:64px}.legalhead h1{font-size:clamp(3rem,6vw,5.5rem)}.legalhead p:not(.eyebrow){font-size:1.12rem;color:var(--muted)}.legalhead small{display:block;margin-top:18px}.reading{grid-template-columns:minmax(190px,.55fr) minmax(0,1.5fr);align-items:start}.reading aside{position:sticky;top:24px;border-left:2px solid #d3c9f2;padding-left:20px;display:grid;gap:12px}.reading aside a{font-size:.94rem;text-decoration:none;color:var(--muted)}.reading aside a:hover,.prose a,.faqs a{color:var(--purple);text-decoration:underline}.prose{max-width:74ch;overflow-wrap:anywhere}.prose h2{font-size:1.8rem;line-height:1.18;color:var(--ink);margin:36px 0 15px;scroll-margin-top:20px}.prose h3{color:var(--ink);margin:24px 0 6px}.prose p{margin:0 0 14px}.prose li{margin-block:6px}.prose ul{padding-left:1.3em}.policy-highlight{background:var(--pale);padding:20px;border-radius:14px}
 @media (max-width: 780px) {
   .wrap { width: calc(100% - clamp(28px, 6vw, 40px)); }
-  .mast { min-height: 68px; flex-wrap: wrap; gap: 4px 12px; padding-block: 8px; }
-  .mast nav { flex-wrap: wrap; gap: 0; }
-  .mast nav a { padding: 12px 10px; }
+  .mast { min-height: 64px; padding-block: 8px; }
+  .mast nav { display: none; }
   .hero, .cards, .guide, .reading { grid-template-columns: minmax(0, 1fr); }
   .hero { gap: 36px; padding-block: 40px; }
   .hero > *, .guide > *, .reading > *, .foot > * { min-width: 0; max-width: 100%; }
@@ -27,9 +26,6 @@
 }
 
 @media (max-width: 380px) {
-  .mast { flex-direction: column; align-items: flex-start; }
-  .mast nav { width: 100%; }
-  .mast nav a { flex: 1; text-align: center; }
   .foot > div { gap: 12px 18px; }
 }
 
@@ -39,4 +35,8 @@
     transition: none !important;
     scroll-behavior: auto !important;
   }
+}
+
+@media (hover: none) and (pointer: coarse) and (orientation: landscape) and (max-height: 500px) {
+  .mast nav { display: none; }
 }
