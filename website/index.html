@@ -51,18 +51,18 @@
 
       <!-- Action Buttons -->
       <div class="hero-cta-group">
-        <a href="./downloads/CloudBox-v1.0.apk" class="btn btn-hero-download" download="CloudBox-v1.0.apk">
+        <a href="./downloads/CloudBox-v1.0.apk" class="btn btn-hero-download" id="primaryDownloadBtn" download="CloudBox-v1.0.apk">
           <span class="btn-icon">
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
           </span>
           <span class="btn-copy">
             <span class="btn-main">Download CloudBox APK</span>
-            <span class="btn-sub">v1.0 · Android 7.0+ (API 24+) · 26.7 MB</span>
+            <span class="btn-sub">v1.0 · Android 7.0+ · 34.5 MB</span>
           </span>
         </a>
-        <a href="#features" class="btn btn-hero-secondary">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 6px;"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></svg>
-          Explore Features
+        <a href="https://github.com/Rajan7013/cloudbox/releases/download/v1.0/CloudBox-v1.0.apk" class="btn btn-hero-secondary" target="_blank" rel="noopener">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 6px;"><path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"></path></svg>
+          GitHub Mirror (CDN)
         </a>
       </div>
 
@@ -279,6 +279,14 @@
           navToggle.classList.remove('active');
           navLinks.classList.remove('open');
         }
+      });
+    }
+
+    // Detect if page was opened via local file:// protocol
+    const primaryBtn = document.getElementById('primaryDownloadBtn');
+    if (primaryBtn && window.location.protocol === 'file:') {
+      primaryBtn.addEventListener('click', (e) => {
+        alert("You are opening this website directly via file://. Browser security restricts downloading files over file:// URLs.\n\nTo download:\n1. Double-click 'run_website.bat' in the project folder to open via http://localhost:8000, OR\n2. Open the file directly from: website/downloads/CloudBox-v1.0.apk");
       });
     }
   </script>
