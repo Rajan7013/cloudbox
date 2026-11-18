@@ -80,6 +80,14 @@ data class DrivePermissionListResponse(
 )
 
 @JsonClass(generateAdapter = true)
+data class DrivePermissionDetailDto(
+  val permissionType: String? = null,
+  val inheritedFrom: String? = null,
+  val role: String? = null,
+  val inherited: Boolean? = null,
+)
+
+@JsonClass(generateAdapter = true)
 data class DrivePermissionDto(
   val id: String,
   val type: String = "user",
@@ -89,6 +97,7 @@ data class DrivePermissionDto(
   val photoLink: String? = null,
   val allowFileDiscovery: Boolean? = null,
   val expirationTime: String? = null,
+  val permissionDetails: List<DrivePermissionDetailDto>? = null,
 )
 
 @JsonClass(generateAdapter = true)
@@ -121,8 +130,7 @@ data class DriveCreatePermissionRequest(
 
 @JsonClass(generateAdapter = true)
 data class DriveUpdatePermissionRequest(
-  val role: String? = null,
-  val expirationTime: String? = null,
+  val role: String,
 )
 
 @JsonClass(generateAdapter = true)

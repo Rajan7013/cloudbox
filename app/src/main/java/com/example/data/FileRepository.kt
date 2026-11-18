@@ -82,10 +82,14 @@ interface FileRepository {
     fileId: String,
     permissionId: String,
     role: AccessRole,
-    expirationIso: String? = null,
+    parentId: String? = null,
   ): SharePermission
 
-  suspend fun removePermission(fileId: String, permissionId: String)
+  suspend fun removePermission(
+    fileId: String,
+    permissionId: String,
+    parentId: String? = null,
+  )
 
   suspend fun setAnyoneLinkAccess(fileId: String, enabled: Boolean, role: AccessRole = AccessRole.VIEWER): List<SharePermission>
 

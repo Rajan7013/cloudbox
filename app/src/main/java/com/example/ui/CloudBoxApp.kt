@@ -826,8 +826,12 @@ private fun CloudBoxWorkspace(
       isOnline = networkStatus.isOnline,
       onDismiss = { shareSheetFile = null },
       onInvite = { emails, role -> viewModel.inviteEmails(file.id, emails, role) },
-      onChangeRole = { permId, role -> viewModel.changePermissionRole(file.id, permId, role) },
-      onRemovePermission = { permId -> viewModel.removePermission(file.id, permId) },
+      onChangeRole = { permId, role, inheritedParentId ->
+        viewModel.changePermissionRole(file.id, permId, role, inheritedParentId ?: file.parentId)
+      },
+      onRemovePermission = { permId, inheritedParentId ->
+        viewModel.removePermission(file.id, permId, inheritedParentId ?: file.parentId)
+      },
       onSetAnyoneLink = { enabled, role -> viewModel.setAnyoneLinkAccess(file.id, enabled, role) },
       onCopyLink = { copyLinkToClipboard(it) },
       onRetryLoad = { viewModel.loadPermissions(file.id) },

@@ -205,6 +205,8 @@ data class SharePermission(
   val photoLink: String?,
   val allowFileDiscovery: Boolean = false,
   val expirationTime: String? = null,
+  val isInherited: Boolean = false,
+  val inheritedFrom: String? = null,
 )
 
 data class FilterConfig(

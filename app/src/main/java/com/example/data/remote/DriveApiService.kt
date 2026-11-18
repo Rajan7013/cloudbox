@@ -84,7 +84,7 @@ interface DriveApiService {
   suspend fun listPermissions(
     @Path("fileId") fileId: String,
     @Query("supportsAllDrives") supportsAllDrives: Boolean = true,
-    @Query("fields") fields: String = "permissions(id,type,role,displayName,emailAddress,photoLink,allowFileDiscovery,expirationTime)",
+    @Query("fields") fields: String = "permissions(id,type,role,displayName,emailAddress,photoLink,allowFileDiscovery,expirationTime,permissionDetails)",
   ): DrivePermissionListResponse
 
   @POST("drive/v3/files/{fileId}/permissions")
@@ -93,7 +93,7 @@ interface DriveApiService {
     @Body body: DriveCreatePermissionRequest,
     @Query("sendNotificationEmail") sendNotificationEmail: Boolean? = null,
     @Query("supportsAllDrives") supportsAllDrives: Boolean = true,
-    @Query("fields") fields: String = "id,type,role,displayName,emailAddress,photoLink,allowFileDiscovery,expirationTime",
+    @Query("fields") fields: String = "id,type,role,displayName,emailAddress,photoLink,allowFileDiscovery,expirationTime,permissionDetails",
   ): DrivePermissionDto
 
   @PATCH("drive/v3/files/{fileId}/permissions/{permissionId}")
@@ -102,7 +102,15 @@ interface DriveApiService {
     @Path("permissionId") permissionId: String,
     @Body body: DriveUpdatePermissionRequest,
     @Query("supportsAllDrives") supportsAllDrives: Boolean = true,
-    @Query("fields") fields: String = "id,type,role,displayName,emailAddress,photoLink,allowFileDiscovery,expirationTime",
+    @Query("fields") fields: String = "id,type,role,displayName,emailAddress,photoLink,allowFileDiscovery,expirationTime,permissionDetails",
+  ): DrivePermissionDto
+
+  @PATCH("drive/v3/files/{fileId}/permissions/{permissionId}")
+  suspend fun updatePermissionDirect(
+    @Path("fileId") fileId: String,
+    @Path("permissionId") permissionId: String,
+    @Body body: DriveUpdatePermissionRequest,
+    @Query("fields") fields: String = "id,type,role,displayName,emailAddress,photoLink,allowFileDiscovery,expirationTime,permissionDetails",
   ): DrivePermissionDto
 
   @DELETE("drive/v3/files/{fileId}/permissions/{permissionId}")

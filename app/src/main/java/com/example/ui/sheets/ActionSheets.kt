@@ -567,7 +567,7 @@ fun FileActionsSheet(
           },
           testTag = "action_details",
         )
-        if (file.canDelete) {
+        if (file.ownedByMe) {
           HorizontalDivider(color = LocalCloudBoxColors.current.border, modifier = Modifier.padding(vertical = 6.dp))
           SheetActionRow(
             icon = Icons.Filled.DeleteOutline,
@@ -707,8 +707,8 @@ fun ShareAndPermissionsSheet(
   isOnline: Boolean,
   onDismiss: () -> Unit,
   onInvite: (emails: List<String>, role: AccessRole) -> Unit,
-  onChangeRole: (permissionId: String, role: AccessRole) -> Unit,
-  onRemovePermission: (permissionId: String) -> Unit,
+  onChangeRole: (permissionId: String, role: AccessRole, inheritedParentId: String?) -> Unit,
+  onRemovePermission: (permissionId: String, inheritedParentId: String?) -> Unit,
   onSetAnyoneLink: (enabled: Boolean, role: AccessRole) -> Unit,
   onCopyLink: (String) -> Unit,
   onRetryLoad: () -> Unit,
@@ -846,19 +846,32 @@ fun ShareAndPermissionsSheet(
               name = "${currentUser.displayName} (you)",
               email = currentUser.email,
               role = AccessRole.OWNER,
+              isOwner = true,
+              isInherited = false,
               canModify = false,
               onChangeRole = {},
               onRemove = {},
             )
           } else {
             userPerms.forEach { perm ->
+              val isItemOwner = perm.role == AccessRole.OWNER ||
+                (file.ownerEmail.isNotBlank() && perm.emailAddress.equals(file.ownerEmail, ignoreCase = true))
+              val isCurrentUser = currentUser != null && perm.emailAddress.equals(currentUser.email, ignoreCase = true)
+
               PermissionPersonRow(
-                name = perm.displayName ?: perm.emailAddress ?: "Collaborator",
+                name = when {
+                  isItemOwner && isCurrentUser -> "${perm.displayName ?: "You"} (You, Owner)"
+                  isItemOwner -> "${perm.displayName ?: perm.emailAddress ?: "Owner"} (Owner)"
+                  isCurrentUser -> "${perm.displayName ?: "You"} (You)"
+                  else -> perm.displayName ?: perm.emailAddress ?: "Collaborator"
+                },
                 email = perm.emailAddress ?: "",
                 role = perm.role,
-                canModify = canManageSharing && perm.role != AccessRole.OWNER && !isBusy,
-                onChangeRole = { newRole -> onChangeRole(perm.id, newRole) },
-                onRemove = { onRemovePermission(perm.id) },
+                isOwner = isItemOwner,
+                isInherited = perm.isInherited,
+                canModify = canManageSharing && !isItemOwner && !isBusy,
+                onChangeRole = { newRole -> onChangeRole(perm.id, newRole, perm.inheritedFrom) },
+                onRemove = { onRemovePermission(perm.id, perm.inheritedFrom) },
               )
             }
           }
@@ -979,6 +992,8 @@ private fun PermissionPersonRow(
   name: String,
   email: String,
   role: AccessRole,
+  isOwner: Boolean = false,
+  isInherited: Boolean = false,
   canModify: Boolean,
   onChangeRole: (AccessRole) -> Unit,
   onRemove: () -> Unit,
@@ -1004,18 +1019,36 @@ private fun PermissionPersonRow(
       if (email.isNotBlank()) {
         Text(email, style = MaterialTheme.typography.bodySmall, color = LocalCloudBoxColors.current.textSecondary)
       }
+      if (isInherited) {
+        Text(
+          "Inherited from folder",
+          style = MaterialTheme.typography.labelSmall,
+          color = MaterialTheme.colorScheme.tertiary,
+        )
+      }
     }
-    if (role == AccessRole.OWNER) {
+    if (isOwner || role == AccessRole.OWNER) {
       Surface(
         color = MaterialTheme.colorScheme.surfaceVariant,
         shape = RoundedCornerShape(8.dp),
       ) {
-        Text(
-          text = "Owner",
-          style = MaterialTheme.typography.labelSmall,
+        Row(
+          verticalAlignment = Alignment.CenterVertically,
           modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
-          color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
+        ) {
+          Icon(
+            imageVector = Icons.Filled.Lock,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.size(13.dp),
+          )
+          Spacer(modifier = Modifier.width(4.dp))
+          Text(
+            text = "Owner",
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.primary,
+          )
+        }
       }
     } else {
       Row(verticalAlignment = Alignment.CenterVertically) {

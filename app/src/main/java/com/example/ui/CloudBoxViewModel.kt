@@ -1001,6 +1001,10 @@ class CloudBoxViewModel(application: Application) : AndroidViewModel(application
   }
 
   fun moveToTrash(file: CloudFile) {
+    if (!file.ownedByMe) {
+      emitToast("Only the original owner can delete this ${if (file.isFolder) "folder" else "file"}.")
+      return
+    }
     viewModelScope.launch {
       try {
         repository.setTrashed(file.id, true)
@@ -1017,10 +1021,16 @@ class CloudBoxViewModel(application: Application) : AndroidViewModel(application
     val ids = _selectedIds.value
     val targets = files.filter { it.id in ids }
     if (targets.isEmpty()) return
+    val ownedTargets = targets.filter { it.ownedByMe }
+    if (ownedTargets.isEmpty()) {
+      emitToast("Only the original owner can delete these items.")
+      _selectedIds.value = emptySet()
+      return
+    }
     _selectedIds.value = emptySet()
     viewModelScope.launch {
       var trashedCount = 0
-      targets.forEach { file ->
+      ownedTargets.forEach { file ->
         runCatching { repository.setTrashed(file.id, true) }.onSuccess { trashedCount++ }
       }
       refreshCurrentTab()
@@ -1148,7 +1158,7 @@ class CloudBoxViewModel(application: Application) : AndroidViewModel(application
     }
   }
 
-  fun changePermissionRole(fileId: String, permissionId: String, role: AccessRole) {
+  fun changePermissionRole(fileId: String, permissionId: String, role: AccessRole, parentId: String? = null) {
     viewModelScope.launch {
       _isShareBusy.value = true
       val previousList = (_permissionsState.value as? ScreenDataState.Success)?.data
@@ -1158,7 +1168,7 @@ class CloudBoxViewModel(application: Application) : AndroidViewModel(application
         )
       }
       try {
-        repository.updatePermissionRole(fileId, permissionId, role)
+        repository.updatePermissionRole(fileId, permissionId, role, parentId)
         loadPermissions(fileId)
         loadShared()
         emitToast("Role updated to ${role.label}")
@@ -1166,14 +1176,15 @@ class CloudBoxViewModel(application: Application) : AndroidViewModel(application
         if (previousList != null) {
           _permissionsState.value = ScreenDataState.Success(previousList)
         }
-        emitToast(e.localizedMessage ?: "Couldn't update role")
+        val cleanMsg = cleanPermissionErrorMessage(e.localizedMessage ?: "Couldn't update role")
+        emitToast(cleanMsg)
       } finally {
         _isShareBusy.value = false
       }
     }
   }
 
-  fun removePermission(fileId: String, permissionId: String) {
+  fun removePermission(fileId: String, permissionId: String, parentId: String? = null) {
     viewModelScope.launch {
       _isShareBusy.value = true
       val previousList = (_permissionsState.value as? ScreenDataState.Success)?.data
@@ -1181,7 +1192,7 @@ class CloudBoxViewModel(application: Application) : AndroidViewModel(application
         _permissionsState.value = ScreenDataState.Success(previousList.filter { it.id != permissionId })
       }
       try {
-        repository.removePermission(fileId, permissionId)
+        repository.removePermission(fileId, permissionId, parentId)
         loadPermissions(fileId)
         loadShared()
         emitToast("Access removed")
@@ -1189,10 +1200,23 @@ class CloudBoxViewModel(application: Application) : AndroidViewModel(application
         if (previousList != null) {
           _permissionsState.value = ScreenDataState.Success(previousList)
         }
-        emitToast(e.localizedMessage ?: "Couldn't remove access")
+        val cleanMsg = cleanPermissionErrorMessage(e.localizedMessage ?: "Couldn't remove access")
+        emitToast(cleanMsg)
       } finally {
         _isShareBusy.value = false
       }
+    }
+  }
+
+  private fun cleanPermissionErrorMessage(raw: String): String {
+    return when {
+      raw.contains("inherited", ignoreCase = true) || raw.contains("limited access", ignoreCase = true) ->
+        "Access is inherited from the parent folder. To change or remove access, please open the parent folder's share settings."
+      raw.contains("cannot delete the permission", ignoreCase = true) ->
+        "Cannot remove this permission directly because it is inherited from the parent folder."
+      raw.contains("cannot modify the permission", ignoreCase = true) ->
+        "Cannot modify this permission directly because it is inherited from the parent folder."
+      else -> raw
     }
   }
 
