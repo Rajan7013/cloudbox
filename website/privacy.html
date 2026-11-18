@@ -21,8 +21,7 @@
         <img src="./assets/cloudbox_icon.jpg" alt="CloudBox Logo" class="brand-logo-img">
         <span>CloudBox</span>
       </a>
-      <button class="nav-toggle" aria-label="Toggle menu"
-        onclick="document.querySelector('.nav-links').classList.toggle('open')">
+      <button class="nav-toggle" aria-label="Toggle navigation menu" type="button">
         <span></span><span></span><span></span>
       </button>
       <ul class="nav-links">
@@ -178,6 +177,30 @@
       </div>
     </div>
   </footer>
+
+  <script>
+    const navToggle = document.querySelector('.nav-toggle');
+    const navLinks = document.querySelector('.nav-links');
+    if (navToggle && navLinks) {
+      navToggle.addEventListener('click', (e) => {
+        e.stopPropagation();
+        navToggle.classList.toggle('active');
+        navLinks.classList.toggle('open');
+      });
+      document.querySelectorAll('.nav-links a').forEach(link => {
+        link.addEventListener('click', () => {
+          navToggle.classList.remove('active');
+          navLinks.classList.remove('open');
+        });
+      });
+      document.addEventListener('click', (e) => {
+        if (!navLinks.contains(e.target) && !navToggle.contains(e.target)) {
+          navToggle.classList.remove('active');
+          navLinks.classList.remove('open');
+        }
+      });
+    }
+  </script>
 
 </body>
 
