@@ -11,7 +11,7 @@ import androidx.compose.ui.platform.LocalContext
 import com.example.model.CloudFile
 import com.example.model.FileCategory
 
-internal enum class ReaderKind(val label: String, val setting: String, val choices: List<String>) {
+enum class ReaderKind(val label: String, val setting: String, val choices: List<String>) {
   PDF("PDF", "Page direction", listOf("Vertical", "Horizontal")),
   DOCS("Word and Docs", "Reading theme", listOf("Light", "Sepia", "Dark")),
   SLIDES("Slides", "Reading theme", listOf("Light", "Sepia", "Dark")),

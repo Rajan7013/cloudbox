@@ -34,6 +34,13 @@ sealed interface ViewerContentState {
   data object Loading : ViewerContentState
   data class ImageFile(val file: File) : ViewerContentState
   data class PdfFile(val file: File) : ViewerContentState
+  data class Document(val file: File, val text: String, val isGoogleDoc: Boolean = false) : ViewerContentState
+  data class SlidesDeck(val file: File, val slides: List<String>, val notes: List<String> = emptyList()) : ViewerContentState
+  data class SheetsWorkbook(val file: File, val sheets: List<Pair<String, SpreadsheetData>>) : ViewerContentState
+  data class Markdown(val file: File, val rawMarkdown: String) : ViewerContentState
+  data class TextDoc(val file: File, val content: String, val isLog: Boolean = false, val isJson: Boolean = false) : ViewerContentState
+  data class Video(val file: File) : ViewerContentState
+  data class Audio(val file: File) : ViewerContentState
   data class TextFile(val text: String) : ViewerContentState
   data class Slides(val pages: List<String>) : ViewerContentState
   data class Workbook(val sheets: List<Pair<String, SpreadsheetData>>) : ViewerContentState
@@ -67,16 +74,35 @@ class ViewerContentLoader(private val repository: FileRepository) {
         withContext(Dispatchers.IO) {
           val extension = if (file.isGoogleWorkspaceDoc) downloaded.extension.lowercase() else file.name.substringAfterLast('.', "").lowercase()
           when (extension) {
-            "docx" -> return@withContext OfficePreview(downloaded).use { ViewerContentState.TextFile(it.document()) }
-            "pptx" -> return@withContext OfficePreview(downloaded).use { ViewerContentState.Slides(it.slides()) }
-            "xlsx" -> return@withContext OfficePreview(downloaded).use { ViewerContentState.Workbook(it.workbook()) }
-            "odt", "odp", "ods" -> return@withContext OfficePreview(downloaded).use { it.openDocument(extension) }
+            "docx" -> return@withContext OfficePreview(downloaded).use { ViewerContentState.Document(downloaded, it.document()) }
+            "pptx" -> return@withContext OfficePreview(downloaded).use { ViewerContentState.SlidesDeck(downloaded, it.slides()) }
+            "xlsx" -> return@withContext OfficePreview(downloaded).use { ViewerContentState.SheetsWorkbook(downloaded, it.workbook()) }
+            "odt" -> return@withContext OfficePreview(downloaded).use {
+              val s = it.openDocument(extension)
+              if (s is ViewerContentState.TextFile) ViewerContentState.Document(downloaded, s.text) else s
+            }
+            "odp" -> return@withContext OfficePreview(downloaded).use {
+              val s = it.openDocument(extension)
+              if (s is ViewerContentState.Slides) ViewerContentState.SlidesDeck(downloaded, s.pages) else s
+            }
+            "ods" -> return@withContext OfficePreview(downloaded).use {
+              val s = it.openDocument(extension)
+              if (s is ViewerContentState.Workbook) ViewerContentState.SheetsWorkbook(downloaded, s.sheets) else s
+            }
+            "md", "markdown" -> return@withContext ViewerContentState.Markdown(downloaded, readPreview(downloaded))
             "doc", "ppt", "xls", "rtf" -> return@withContext ViewerContentState.Unsupported(downloaded)
           }
           when (file.category) {
             FileCategory.IMAGE -> ViewerContentState.ImageFile(downloaded)
             FileCategory.PDF -> ViewerContentState.PdfFile(downloaded)
-            FileCategory.SPREADSHEET -> parseSpreadsheet(downloaded)
+            FileCategory.VIDEO -> ViewerContentState.Video(downloaded)
+            FileCategory.AUDIO -> ViewerContentState.Audio(downloaded)
+            FileCategory.SPREADSHEET -> {
+              val parsed = parseSpreadsheet(downloaded)
+              if (parsed is ViewerContentState.Spreadsheet) {
+                ViewerContentState.SheetsWorkbook(downloaded, listOf(file.name.substringBeforeLast('.') to parsed.data))
+              } else parsed
+            }
             FileCategory.DOCUMENT -> {
               if (file.mimeType == "application/vnd.google-apps.document" ||
                 file.mimeType == "application/vnd.google-apps.presentation"
@@ -86,20 +112,25 @@ class ViewerContentLoader(private val repository: FileRepository) {
                 val ext = downloaded.extension.lowercase()
                 if (ext == "pdf") {
                   ViewerContentState.PdfFile(downloaded)
+                } else if (ext in setOf("md", "markdown")) {
+                  ViewerContentState.Markdown(downloaded, readPreview(downloaded))
                 } else {
                   val content = readPreview(downloaded)
-                  ViewerContentState.TextFile(content)
+                  ViewerContentState.Document(downloaded, content)
                 }
               }
             }
-            FileCategory.VIDEO, FileCategory.AUDIO -> ViewerContentState.VideoOrAudio(downloaded)
             FileCategory.ARCHIVE -> {
               val entries = readZipEntries(downloaded)
               ViewerContentState.Archive(downloaded, entries)
             }
             FileCategory.FOLDER, FileCategory.OTHER -> {
-              if (downloaded.extension.lowercase() in setOf("txt", "md", "json", "xml", "log", "csv", "kt", "ts", "js", "markdown", "yaml", "yml", "ini", "css", "java", "c", "cpp", "html", "py")) {
-                ViewerContentState.TextFile(readPreview(downloaded))
+              val ext = downloaded.extension.lowercase()
+              if (ext in setOf("md", "markdown")) {
+                ViewerContentState.Markdown(downloaded, readPreview(downloaded))
+              } else if (ext in setOf("txt", "log", "json", "xml", "csv", "tsv", "kt", "ts", "js", "yaml", "yml", "ini", "css", "java", "c", "cpp", "html", "py", "sh")) {
+                val content = readPreview(downloaded)
+                ViewerContentState.TextDoc(downloaded, content, isLog = ext == "log", isJson = ext == "json")
               } else {
                 ViewerContentState.Unsupported(downloaded)
               }
