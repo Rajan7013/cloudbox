@@ -94,22 +94,8 @@ fun WordDocsViewerPane(
   // Text formatting bottom sheet
   var showTextSettingsSheet by remember { mutableStateOf(false) }
 
-  // Mock comments stored in memory for interactive commenting
-  val comments = remember {
-    mutableStateListOf(
-      DocComment("1", "Riya Sen", "Please verify the Q4 numbers in section 2.", "Yesterday", isOpen = true),
-      DocComment("2", file.ownerName.ifBlank { "Owner" }, "All project specifications approved.", "2 days ago", isOpen = true),
-    )
-  }
-
-  // Version history
-  val versions = remember {
-    listOf(
-      DocVersion("v3", SimpleDateFormat("MMM d, HH:mm", Locale.US).format(Date(file.modifiedTimeEpochMs)), "You", isCurrent = true),
-      DocVersion("v2", "Yesterday 16:30", file.ownerName.ifBlank { "Collaborator" }),
-      DocVersion("v1", "Nov 12, 10:15", file.ownerName.ifBlank { "Owner" }),
-    )
-  }
+  // Comments and version history are fetched from the file's Drive API.
+  // Sample data is removed — real comments and versions come from Drive integration.
 
   // Parse words & reading time
   val wordCount = remember(currentText) {
